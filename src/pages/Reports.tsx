@@ -4,20 +4,218 @@ import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
   Search,
-  Printer,
   FileText,
   User,
   Loader2,
   CheckCircle2,
   Calendar,
-  ArrowLeft
+  Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { showSuccess } from "@/utils/toast";
+import { showSuccess, showError } from "@/utils/toast";
 import { format, differenceInYears } from "date-fns";
-import { cn } from "@/lib/utils";
+import { 
+  Document, 
+  Page, 
+  Text, 
+  View, 
+  StyleSheet, 
+  PDFDownloadLink, 
+  Image,
+  Font
+} from "@react-pdf/renderer";
+
+// Registro de fontes para garantir consistência (opcional, usando as padrão por enquanto)
+// O react-pdf usa fontes padrão como Helvetica/Times-Roman por padrão.
+
+const styles = StyleSheet.create({
+  page: {
+    paddingTop: 160, // Espaço para o cabeçalho fixo
+    paddingBottom: 60,
+    paddingHorizontal: 50,
+    fontFamily: 'Times-Roman',
+    backgroundColor: '#ffffff',
+  },
+  fixedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 0,
+  },
+  timbre: {
+    width: '100%',
+    height: 'auto',
+  },
+  patientInfoContainer: {
+    position: 'absolute',
+    top: 115, // Ajustado para ficar logo abaixo da linha do timbre
+    left: 50,
+    right: 50,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eeeeee',
+    paddingBottom: 10,
+    marginBottom: 20,
+  },
+  patientRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  patientLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  patientValue: {
+    fontSize: 11,
+  },
+  patientSubRow: {
+    flexDirection: 'row',
+    gap: 30,
+  },
+  sectorTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    textDecoration: 'underline',
+    marginTop: 20,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+  },
+  examBlock: {
+    marginBottom: 15,
+  },
+  examName: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 5,
+    textTransform: 'uppercase',
+  },
+  resultText: {
+    fontSize: 12,
+    lineHeight: 1.4,
+  },
+  referenceText: {
+    fontSize: 8.5,
+    color: '#555555',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 8,
+    color: '#999999',
+  }
+});
+
+// Componente do Documento PDF
+const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
+  const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA", "OUTROS"];
+  
+  const bioOrder = [
+    "GLICOSE", "GLICEMIA", "HEMOGLOBINA GLICADA", "HBA1C",
+    "COLESTEROL TOTAL", "COLESTEROL HDL", "COLESTEROL LDL", "COLESTEROL VLDL", "TRIGLICERÍDEOS",
+    "UREIA", "CREATININA",
+    "TGO", "TGP", "GAMA GT", "FOSFATASE ALCALINA", "BILIRRUBINAS"
+  ];
+
+  const getSector = (examName: string) => {
+    const name = examName.toUpperCase();
+    if (name.includes("HEMOGRAMA") || name.includes("SANGUE")) return "HEMATOLOGIA";
+    if (name.includes("GLICOSE") || name.includes("GLICEMIA") || name.includes("COLESTEROL") || name.includes("TRIGLI") || name.includes("UREIA") || name.includes("CREATININA") || name.includes("TGO") || name.includes("TGP") || name.includes("HBA1C") || name.includes("GLICADA")) return "BIOQUÍMICA";
+    if (name.includes("URINA") || name.includes("EAS")) return "URINÁLISE";
+    if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
+    if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
+    return "OUTROS";
+  };
+
+  const sortExams = (exams: any[]) => {
+    return [...exams].sort((a, b) => {
+      const nameA = a.exams?.name.toUpperCase() || "";
+      const nameB = b.exams?.name.toUpperCase() || "";
+      const idxA = bioOrder.findIndex(item => nameA.includes(item));
+      const idxB = bioOrder.findIndex(item => nameB.includes(item));
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return nameA.localeCompare(nameB);
+    });
+  };
+
+  const groups: { [key: string]: any[] } = {};
+  service.service_exams.forEach((se: any) => {
+    const sector = getSector(se.exams?.name || "");
+    if (!groups[sector]) groups[sector] = [];
+    groups[sector].push(se);
+  });
+
+  // Caminho da imagem corrigido para produção (usando URL absoluta do domínio)
+  const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
+
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        {/* Cabeçalho Fixo em todas as páginas */}
+        <View fixed style={styles.fixedHeader}>
+          <Image src={timbreUrl} style={styles.timbre} />
+          <View style={styles.patientInfoContainer}>
+            <View style={styles.patientRow}>
+              <Text style={styles.patientLabel}>NOME: <Text style={styles.patientValue}>{patient.full_name.toUpperCase()}</Text></Text>
+              <Text style={styles.patientLabel}>REGISTRO: <Text style={styles.patientValue}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
+            </View>
+            <View style={styles.patientSubRow}>
+              <Text style={styles.patientLabel}>CPF: <Text style={styles.patientValue}>{patient.cpf}</Text></Text>
+              <Text style={styles.patientLabel}>IDADE: <Text style={styles.patientValue}>{differenceInYears(new Date(), new Date(patient.birth_date))} ANOS</Text></Text>
+              <Text style={styles.patientLabel}>DN: <Text style={styles.patientValue}>{format(new Date(patient.birth_date), "dd/MM/yyyy")}</Text></Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Conteúdo dos Exames */}
+        {sectorOrder.map(sector => {
+          if (!groups[sector]) return null;
+          const sortedExams = sortExams(groups[sector]);
+          
+          return (
+            <View key={sector}>
+              {sector !== "OUTROS" && (
+                <Text style={styles.sectorTitle}>{sector}</Text>
+              )}
+              {sortedExams.map((se: any) => (
+                <View key={se.id} style={styles.examBlock} wrap={false}>
+                  <Text style={styles.examName}>{se.exams?.name}</Text>
+                  {se.result_value?.split('\n').map((line: string, i: number) => {
+                    const isRef = line.toLowerCase().includes("referência") || 
+                                  line.toLowerCase().includes("ref:") || 
+                                  line.toLowerCase().includes("valor:") || 
+                                  line.toLowerCase().includes("vr:");
+                    return (
+                      <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
+                        {line}
+                      </Text>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          );
+        })}
+
+        <Text 
+          style={styles.footer} 
+          render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} 
+          fixed 
+        />
+      </Page>
+    </Document>
+  );
+};
 
 const Reports = () => {
   const [search, setSearch] = useState("");
@@ -25,7 +223,6 @@ const Reports = () => {
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
-  const [activeService, setActiveService] = useState<any>(null);
 
   useEffect(() => {
     if (search.length > 2) {
@@ -69,142 +266,15 @@ const Reports = () => {
     setServices(data || []);
   };
 
-  // Ordem Clínica Real (Padrão Laboratorial)
-  const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA", "OUTROS"];
-  
-  const bioOrder = [
-    "GLICOSE", "GLICEMIA", 
-    "UREIA", "CREATININA", // Renal
-    "COLESTEROL TOTAL", "COLESTEROL HDL", "COLESTEROL LDL", "COLESTEROL VLDL", "TRIGLICERÍDEOS", // Lipidograma
-    "TGO", "TGP", "GAMA GT", "FOSFATASE ALCALINA", "BILIRRUBINAS" // Hepática
-  ];
-
-  const getSector = (examName: string) => {
-    const name = examName.toUpperCase();
-    if (name.includes("HEMOGRAMA") || name.includes("SANGUE") || name.includes("ERITRO") || name.includes("LEUCO")) return "HEMATOLOGIA";
-    if (name.includes("GLICOSE") || name.includes("GLICEMIA") || name.includes("COLESTEROL") || name.includes("TRIGLI") || name.includes("UREIA") || name.includes("CREATININA") || name.includes("TGO") || name.includes("TGP")) return "BIOQUÍMICA";
-    if (name.includes("URINA") || name.includes("EAS")) return "URINÁLISE";
-    if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
-    if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
-    return "OUTROS";
-  };
-
-  const sortExamsInSector = (sector: string, exams: any[]) => {
-    if (sector === "BIOQUÍMICA") {
-      return [...exams].sort((a, b) => {
-        const nameA = a.exams?.name.toUpperCase() || "";
-        const nameB = b.exams?.name.toUpperCase() || "";
-        const idxA = bioOrder.findIndex(item => nameA.includes(item));
-        const idxB = bioOrder.findIndex(item => nameB.includes(item));
-        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-        if (idxA !== -1) return -1;
-        if (idxB !== -1) return 1;
-        return nameA.localeCompare(nameB);
-      });
-    }
-    return [...exams].sort((a, b) => (a.exams?.name || "").localeCompare(b.exams?.name || ""));
-  };
-
-  const groupedExams = (exams: any[]) => {
-    const groups: { [key: string]: any[] } = {};
-    exams.forEach(se => {
-      const sector = getSector(se.exams?.name || "");
-      if (!groups[sector]) groups[sector] = [];
-      groups[sector].push(se);
-    });
-    
-    const sortedGroups: { [key: string]: any[] } = {};
-    sectorOrder.forEach(sector => {
-      if (groups[sector]) {
-        sortedGroups[sector] = sortExamsInSector(sector, groups[sector]);
-      }
-    });
-    
-    return sortedGroups;
-  };
-
-  const handlePrint = (service: any) => {
-    setActiveService(service);
-    setTimeout(() => {
-      window.print();
-    }, 500);
-  };
-
   return (
     <DashboardLayout>
-      {/* Estilos de Impressão Injetados */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          @page {
-            size: A4;
-            margin: 0;
-          }
-          body {
-            margin: 0;
-            padding: 0;
-            background: white !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-          .print-container {
-            display: block !important;
-            width: 210mm;
-            margin: 0 auto;
-            background: white;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-          }
-          thead {
-            display: table-header-group;
-          }
-          tfoot {
-            display: table-footer-group;
-          }
-          .page-header-space {
-            height: 65mm; /* Espaço para timbre + cabeçalho paciente */
-          }
-          .page-footer-space {
-            height: 30mm; /* Espaço para o rodapé do timbre */
-          }
-          .fixed-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 210mm;
-            z-index: 1000;
-          }
-          .fixed-footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 210mm;
-            z-index: 1000;
-          }
-          .exam-block {
-            page-break-inside: avoid;
-            margin-bottom: 8mm;
-          }
-          .sector-title {
-            page-break-after: avoid;
-          }
-        }
-        .print-container {
-          display: none;
-        }
-      `}} />
-
-      <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-700 no-print">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
-              <Printer className="w-6 h-6 text-blue-400" />
-              Impressão de Laudos
-            </h1>
-            <p className="text-blue-300/50 text-sm mt-1 font-medium">Geração de documentos oficiais em padrão laboratorial</p>
-          </div>
+      <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-700">
+        <div>
+          <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
+            <FileText className="w-6 h-6 text-blue-400" />
+            Central de Laudos
+          </h1>
+          <p className="text-blue-300/50 text-sm mt-1 font-medium">Baixe os resultados oficiais em formato PDF estruturado</p>
         </div>
 
         {/* BUSCA */}
@@ -268,12 +338,19 @@ const Reports = () => {
                 </div>
               </div>
               
-              <Button 
-                onClick={() => handlePrint(service)}
-                className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-6"
+              <PDFDownloadLink 
+                document={<LabReportPDF service={service} patient={selectedPatient} />} 
+                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${format(new Date(service.created_at), "ddMMyy")}.pdf`}
               >
-                <Printer className="w-4 h-4" /> Imprimir Laudo
-              </Button>
+                {({ loading: pdfLoading }) => (
+                  <Button 
+                    className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-6"
+                    disabled={pdfLoading}
+                  >
+                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar Laudo</>}
+                  </Button>
+                )}
+              </PDFDownloadLink>
             </div>
           ))}
 
@@ -285,114 +362,6 @@ const Reports = () => {
           )}
         </div>
       </div>
-
-      {/* ÁREA DE IMPRESSÃO (RENDERIZADA APENAS NO PRINT) */}
-      {activeService && (
-        <div className="print-container">
-          {/* Cabeçalho Fixo (Timbre + Dados Paciente) */}
-          <div className="fixed-header">
-            <img src="/src/assets/timbre.png" className="w-full h-auto" alt="Timbre" />
-            <div style={{ 
-              padding: "0 20mm", 
-              marginTop: "-45mm", // Ajuste para sobrepor ao timbre se necessário, ou use margem positiva
-              position: "relative",
-              top: "45mm" // Posiciona exatamente abaixo da linha do timbre
-            }}>
-              <div style={{ 
-                fontFamily: '"Times New Roman", serif', 
-                fontSize: "11pt", 
-                lineHeight: "1.4",
-                borderBottom: "1px solid #eee",
-                paddingBottom: "4mm",
-                marginBottom: "5mm"
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1mm" }}>
-                  <div style={{ flex: 1 }}><strong>NOME:</strong> {selectedPatient.full_name.toUpperCase()}</div>
-                  <div style={{ width: "60mm", textAlign: "right" }}><strong>REGISTRO:</strong> #{activeService.id.slice(0, 8).toUpperCase()}</div>
-                </div>
-                <div style={{ display: "flex", justifyContent: "flex-start", gap: "12mm" }}>
-                  <div><strong>CPF:</strong> {selectedPatient.cpf}</div>
-                  <div><strong>IDADE:</strong> {differenceInYears(new Date(), new Date(selectedPatient.birth_date))} ANOS</div>
-                  <div><strong>DN:</strong> {format(new Date(selectedPatient.birth_date), "dd/MM/yyyy")}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Rodapé Fixo (Opcional, se o timbre tiver rodapé) */}
-          <div className="fixed-footer">
-            {/* Se o timbre.png já incluir o rodapé, não precisa de nada aqui */}
-          </div>
-
-          {/* Tabela de Conteúdo (Garante a repetição do thead) */}
-          <table>
-            <thead>
-              <tr>
-                <td>
-                  <div className="page-header-space"></div>
-                </td>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div style={{ padding: "0 20mm", fontFamily: '"Times New Roman", serif', color: "#000" }}>
-                    {Object.entries(groupedExams(activeService.service_exams)).map(([sector, exams]) => (
-                      <div key={sector} className="sector-block">
-                        {sector !== "OUTROS" && (
-                          <div className="sector-title" style={{ 
-                            fontSize: "11pt", 
-                            fontWeight: "bold", 
-                            textAlign: "center", 
-                            textDecoration: "underline", 
-                            margin: "6mm 0 4mm 0",
-                            textTransform: "uppercase"
-                          }}>
-                            {sector}
-                          </div>
-                        )}
-                        
-                        {exams.map((se: any) => (
-                          <div key={se.id} className="exam-block">
-                            <div style={{ fontSize: "12pt", fontWeight: "bold", marginBottom: "2mm", textTransform: "uppercase" }}>
-                              {se.exams?.name}
-                            </div>
-                            <div style={{ fontSize: "12pt", whiteSpace: "pre-wrap", lineHeight: "1.4" }}>
-                              {se.result_value?.split('\n').map((line: string, i: number) => {
-                                const isRef = line.toLowerCase().includes("referência") || 
-                                              line.toLowerCase().includes("ref:") || 
-                                              line.toLowerCase().includes("valor:") || 
-                                              line.toLowerCase().includes("vr:");
-                                return (
-                                  <div key={i} style={{ 
-                                    fontSize: isRef ? "8.5pt" : "12pt", 
-                                    color: isRef ? "#555" : "#000", 
-                                    marginTop: isRef ? "1mm" : "0",
-                                    fontStyle: isRef ? "italic" : "normal"
-                                  }}>
-                                    {line}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>
-                  <div className="page-footer-space"></div>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
     </DashboardLayout>
   );
 };
