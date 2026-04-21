@@ -58,8 +58,7 @@ const styles = StyleSheet.create({
     top: 115, 
     left: 50,
     right: 50,
-    borderBottomWidth: 1,
-    borderBottomColor: '#000',
+    // Linha removida conforme solicitado
     paddingBottom: 10,
   },
   patientRow: {
@@ -75,34 +74,34 @@ const styles = StyleSheet.create({
     fontSize: 13, 
   },
   sectorTitle: {
-    fontSize: 12,
+    fontSize: 11,
     textAlign: 'center',
     textDecoration: 'underline',
     marginTop: 15,
-    marginBottom: 12,
+    marginBottom: 10,
     textTransform: 'uppercase',
     fontWeight: 'bold',
   },
   examBlock: {
-    marginBottom: 25, 
+    marginBottom: 20, 
   },
   examName: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
-    marginBottom: 6,
+    marginBottom: 4,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 11, // Ajustado para 11 em Courier para não estourar a margem, mas manter o alinhamento
-    fontFamily: 'Courier', // Fonte monoespaçada preserva os espaços e pontos de alinhamento
-    lineHeight: 1.2,
+    fontSize: 9, // Fonte reduzida conforme solicitado
+    fontFamily: 'Courier', 
+    lineHeight: 1.1,
     color: '#000000',
   },
   referenceText: {
-    fontSize: 9, 
+    fontSize: 8, 
     fontFamily: 'Courier',
     color: '#333333',
-    marginTop: 2,
+    marginTop: 1,
   }
 });
 
@@ -155,8 +154,7 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
                   {se.result_value
-                    ?.replace(/\(\?+\)/g, '') // Remove (?) ou (???)
-                    ?.replace(/\(&+\)/g, '')  // Remove (&) ou (&&&&)
+                    ?.replace(/\([?&]+\)/g, '') // Limpeza agressiva de (?) e (&)
                     ?.split('\n').map((line: string, i: number) => {
                     const isRef = line.toLowerCase().includes("referência") || 
                                   line.toLowerCase().includes("ref:") || 
