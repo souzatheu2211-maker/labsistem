@@ -70,10 +70,7 @@ const Reports = () => {
     setServices(data || []);
   };
 
-  // Ordem lógica de setores
   const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA", "OUTROS"];
-
-  // Ordem lógica de exames dentro da Bioquímica
   const bioOrder = ["GLICOSE", "UREIA", "CREATININA", "COLESTEROL TOTAL", "COLESTEROL HDL", "COLESTEROL LDL", "COLESTEROL VLDL", "TRIGLICERÍDEOS"];
 
   const getSector = (examName: string) => {
@@ -113,15 +110,12 @@ const Reports = () => {
 
       await new Promise(r => setTimeout(r, 1000));
 
-      // Captura o timbre (fundo)
       const timbreCanvas = await html2canvas(timbreElement, { scale: 2, useCORS: true });
       const timbreImg = timbreCanvas.toDataURL("image/png");
 
-      // Captura o cabeçalho do paciente
       const headerCanvas = await html2canvas(headerElement, { scale: 2, useCORS: true, backgroundColor: null });
       const headerImg = headerCanvas.toDataURL("image/png");
 
-      // Captura o conteúdo dos exames (longo)
       const contentCanvas = await html2canvas(contentElement, { scale: 2, useCORS: true, backgroundColor: null });
       const contentImg = contentCanvas.toDataURL("image/png");
 
@@ -130,44 +124,32 @@ const Reports = () => {
       const pageHeight = pdf.internal.pageSize.getHeight();
 
       const contentProps = pdf.getImageProperties(contentImg);
-      const contentPdfWidth = pageWidth - 40; // Margens de 20mm cada lado
+      const contentPdfWidth = pageWidth - 40;
       const contentPdfHeight = (contentProps.height * contentPdfWidth) / contentProps.width;
 
       const headerProps = pdf.getImageProperties(headerImg);
       const headerPdfHeight = (headerProps.height * contentPdfWidth) / headerProps.width;
 
-      // Altura disponível para exames por página (A4 - Timbre Header - Patient Header - Timbre Footer)
       const availableHeight = pageHeight - 42 - headerPdfHeight - 35; 
       
       let heightLeft = contentPdfHeight;
       let position = 0;
 
       while (heightLeft > 0) {
-        // 1. Adiciona Timbre (Fundo)
         pdf.addImage(timbreImg, "PNG", 0, 0, pageWidth, pageHeight);
-
-        // 2. Adiciona Cabeçalho do Paciente (Fixo em todas as páginas)
         pdf.addImage(headerImg, "PNG", 20, 42, contentPdfWidth, headerPdfHeight);
-
-        // 3. Adiciona Slice do Conteúdo
-        // O slice é feito usando os parâmetros de recorte da imagem
-        const sliceHeightInCanvas = (availableHeight * contentProps.width) / contentPdfWidth;
         
         pdf.addImage(
           contentImg, 
           "PNG", 
           20, 
-          42 + headerPdfHeight + 2, // Logo abaixo do cabeçalho
+          42 + headerPdfHeight + 2,
           contentPdfWidth, 
           Math.min(availableHeight, heightLeft),
           undefined,
           'FAST',
           0
         );
-
-        // Infelizmente o jsPDF não suporta recorte de imagem nativo de forma simples com addImage
-        // Então vamos usar a técnica de "cobrir" ou apenas aceitar o fluxo se for uma página só.
-        // Para múltiplas páginas reais com html2canvas, o ideal é renderizar blocos.
         
         heightLeft -= availableHeight;
         if (heightLeft > 0) {
@@ -221,7 +203,6 @@ const Reports = () => {
           <p className="text-blue-300/50 text-sm mt-1 font-medium">Selecione o atendimento para gerar o documento oficial</p>
         </div>
 
-        {/* BUSCA */}
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">
           <div className="relative">
             <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
@@ -268,7 +249,6 @@ const Reports = () => {
           </div>
         )}
 
-        {/* LISTA DE ATENDIMENTOS */}
         <div className="grid grid-cols-1 gap-4">
           {services.map((service) => (
             <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
@@ -290,14 +270,11 @@ const Reports = () => {
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Gerar PDF</>}
               </Button>
 
-              {/* TEMPLATES OCULTOS PARA CAPTURA */}
               <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
-                {/* 1. Timbre Puro */}
                 <div id="timbre-template" style={{ width: "210mm", height: "297mm", background: "#ffffff" }}>
                   <img src="/src/assets/timbre.png" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                 </div>
 
-                {/* 2. Cabeçalho do Paciente */}
                 <div id={`header-template-${service.id}`} style={{ width: "170mm", padding: "2mm 0", fontFamily: '"Times New Roman", serif' }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10pt", marginBottom: "1mm" }}>
                     <div style={{ flex: 1 }}><strong>NOME:</strong> {selectedPatient.full_name.toUpperCase()}</div>
@@ -310,7 +287,6 @@ const Reports = () => {
                   </div>
                 </div>
 
-                {/* 3. Conteúdo dos Exames */}
                 <div id={`content-template-${service.id}`} style={{ width: "170mm", fontFamily: '"Times New Roman", serif' }}>
                   {Object.entries(groupedExams(service.service_exams)).map(([sector, exams]) => (
                     <div key={sector} style={{ marginBottom: "6mm" }}>
@@ -338,7 +314,7 @@ const Reports = () => {
                               return (
                                 <div key={i} style={{ fontSize: isRef ? "7pt" : "9pt", color: isRef ? "#555" : "#000", marginTop: isRef ? "0.5mm" : "0" }}>
                                   {line}
-                                }
+                                </div>
                               );
                             })}
                           </div>
