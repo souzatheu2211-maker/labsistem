@@ -12,8 +12,14 @@ const LoginForm = () => {
 
   return (
     <div className="flex flex-col items-center w-full max-w-sm animate-in fade-in zoom-in duration-700">
-      {/* Container do Formulário - Menor e Escuro */}
+      {/* Container do Formulário */}
       <div className="w-full p-8 bg-blue-950/40 backdrop-blur-xl rounded-[2.5rem] shadow-2xl border border-white/10">
+        
+        <div className="text-center mb-6">
+          <h3 className="text-blue-100 text-lg font-medium tracking-tight">Bem-vindo de volta!</h3>
+          <p className="text-blue-300/50 text-xs mt-1">Identifique-se para acessar o painel</p>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
             <div className="relative group">
@@ -54,7 +60,7 @@ const LoginForm = () => {
         </form>
       </div>
 
-      {/* Créditos Juntos do Login */}
+      {/* Créditos */}
       <div className="mt-6 text-center space-y-1 animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
         <p className="text-blue-100/80 text-sm font-medium tracking-wide">
           Desenvolvido por <span className="text-blue-400">Matheus Souza</span>
