@@ -30,10 +30,10 @@ import {
 // Configuração de Estilos para o PDF (A4)
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 160,    // Espaço para o cabeçalho do timbre
+    paddingTop: 155,    // Espaço para o cabeçalho e info do paciente
     paddingBottom: 80,  // Espaço para o rodapé do timbre
     paddingHorizontal: 50,
-    fontFamily: 'Times-Roman', // Times New Roman padrão do PDF
+    fontFamily: 'Times-Roman',
     backgroundColor: '#ffffff',
   },
   background: {
@@ -43,44 +43,47 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  patientInfo: {
-    marginBottom: 20,
+  patientInfoFixed: {
+    position: 'absolute',
+    top: 110, // Movido mais para cima
+    left: 50,
+    right: 50,
     borderBottomWidth: 0.5,
     borderBottomColor: '#000',
-    paddingBottom: 10,
+    paddingBottom: 5,
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   label: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 'bold',
   },
   value: {
-    fontSize: 10,
+    fontSize: 9,
   },
   sectorTitle: {
-    fontSize: 12,
+    fontSize: 11,
     textAlign: 'center',
     textDecoration: 'underline',
-    marginTop: 15,
-    marginBottom: 10,
+    marginTop: 12,
+    marginBottom: 8,
     textTransform: 'uppercase',
   },
   examBlock: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
   examName: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 3,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 12,
-    lineHeight: 1.3,
+    fontSize: 10, // Reduzido de 12 para 10
+    lineHeight: 1.2,
     color: '#000000',
   },
   referenceText: {
@@ -91,7 +94,8 @@ const styles = StyleSheet.create({
 });
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
-  const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA", "OUTROS"];
+  // Removido "OUTROS" da ordem de setores
+  const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA"];
   
   const getSector = (examName: string) => {
     const name = examName.toUpperCase();
@@ -100,7 +104,7 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
     if (name.includes("URINA") || name.includes("EAS")) return "URINÁLISE";
     if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
     if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
-    return "OUTROS";
+    return "HEMATOLOGIA"; // Default para não cair em "OUTROS"
   };
 
   const groups: { [key: string]: any[] } = {};
@@ -118,8 +122,8 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
         {/* Timbre como fundo fixo */}
         <Image src={timbreUrl} style={styles.background} fixed />
 
-        {/* Informações do Paciente sobrepostas ao timbre */}
-        <View style={styles.patientInfo}>
+        {/* Informações do Paciente FIXAS em todas as páginas */}
+        <View style={styles.patientInfoFixed} fixed>
           <View style={styles.patientRow}>
             <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
             <Text style={styles.label}>REGISTRO: <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
@@ -141,7 +145,10 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
               {groups[sector].map((se: any) => (
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
-                  {se.result_value?.split('\n').map((line: string, i: number) => {
+                  {se.result_value
+                    ?.replace(/\(\?\)/g, '') // Remove (?)
+                    ?.replace(/\(&\)/g, '')  // Remove (&) caso exista
+                    ?.split('\n').map((line: string, i: number) => {
                     const isRef = line.toLowerCase().includes("referência") || 
                                   line.toLowerCase().includes("ref:") || 
                                   line.toLowerCase().includes("valor:") || 
