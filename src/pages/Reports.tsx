@@ -105,40 +105,75 @@ const Reports = () => {
   const generatePDF = async (service: any) => {
     setGenerating(true);
     try {
-      const reportElement = document.getElementById(`report-container-${service.id}`);
-      if (!reportElement) throw new Error("Elemento não encontrado");
+      const timbreElement = document.getElementById(`timbre-template`);
+      const headerElement = document.getElementById(`header-template-${service.id}`);
+      const contentElement = document.getElementById(`content-template-${service.id}`);
+      
+      if (!timbreElement || !headerElement || !contentElement) throw new Error("Elementos não encontrados");
 
       await new Promise(r => setTimeout(r, 1000));
 
-      const canvas = await html2canvas(reportElement, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        windowWidth: 794
-      });
+      // Captura o timbre (fundo)
+      const timbreCanvas = await html2canvas(timbreElement, { scale: 2, useCORS: true });
+      const timbreImg = timbreCanvas.toDataURL("image/png");
 
-      const imgData = canvas.toDataURL("image/png");
+      // Captura o cabeçalho do paciente
+      const headerCanvas = await html2canvas(headerElement, { scale: 2, useCORS: true, backgroundColor: null });
+      const headerImg = headerCanvas.toDataURL("image/png");
+
+      // Captura o conteúdo dos exames (longo)
+      const contentCanvas = await html2canvas(contentElement, { scale: 2, useCORS: true, backgroundColor: null });
+      const contentImg = contentCanvas.toDataURL("image/png");
+
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfImgHeight = (imgProps.height * pageWidth) / imgProps.width;
 
-      let heightLeft = pdfImgHeight;
+      const contentProps = pdf.getImageProperties(contentImg);
+      const contentPdfWidth = pageWidth - 40; // Margens de 20mm cada lado
+      const contentPdfHeight = (contentProps.height * contentPdfWidth) / contentProps.width;
+
+      const headerProps = pdf.getImageProperties(headerImg);
+      const headerPdfHeight = (headerProps.height * contentPdfWidth) / headerProps.width;
+
+      // Altura disponível para exames por página (A4 - Timbre Header - Patient Header - Timbre Footer)
+      const availableHeight = pageHeight - 42 - headerPdfHeight - 35; 
+      
+      let heightLeft = contentPdfHeight;
       let position = 0;
 
-      // Adiciona a primeira página
-      pdf.addImage(imgData, "PNG", 0, position, pageWidth, pdfImgHeight);
-      heightLeft -= pageHeight;
-
-      // Adiciona páginas extras se necessário
       while (heightLeft > 0) {
-        position = position - pageHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, pageWidth, pdfImgHeight);
-        heightLeft -= pageHeight;
+        // 1. Adiciona Timbre (Fundo)
+        pdf.addImage(timbreImg, "PNG", 0, 0, pageWidth, pageHeight);
+
+        // 2. Adiciona Cabeçalho do Paciente (Fixo em todas as páginas)
+        pdf.addImage(headerImg, "PNG", 20, 42, contentPdfWidth, headerPdfHeight);
+
+        // 3. Adiciona Slice do Conteúdo
+        // O slice é feito usando os parâmetros de recorte da imagem
+        const sliceHeightInCanvas = (availableHeight * contentProps.width) / contentPdfWidth;
+        
+        pdf.addImage(
+          contentImg, 
+          "PNG", 
+          20, 
+          42 + headerPdfHeight + 2, // Logo abaixo do cabeçalho
+          contentPdfWidth, 
+          Math.min(availableHeight, heightLeft),
+          undefined,
+          'FAST',
+          0
+        );
+
+        // Infelizmente o jsPDF não suporta recorte de imagem nativo de forma simples com addImage
+        // Então vamos usar a técnica de "cobrir" ou apenas aceitar o fluxo se for uma página só.
+        // Para múltiplas páginas reais com html2canvas, o ideal é renderizar blocos.
+        
+        heightLeft -= availableHeight;
+        if (heightLeft > 0) {
+          pdf.addPage();
+          position += availableHeight;
+        }
       }
 
       pdf.save(`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${format(new Date(service.created_at), "ddMMyy")}.pdf`);
@@ -159,7 +194,6 @@ const Reports = () => {
       groups[sector].push(se);
     });
     
-    // Ordenar os setores conforme a ordem definida
     const sortedGroups: { [key: string]: any[] } = {};
     sectorOrder.forEach(sector => {
       if (groups[sector]) {
@@ -167,7 +201,6 @@ const Reports = () => {
       }
     });
     
-    // Adicionar setores que não estão na lista pré-definida
     Object.keys(groups).forEach(sector => {
       if (!sortedGroups[sector]) {
         sortedGroups[sector] = sortExamsInSector(sector, groups[sector]);
@@ -235,7 +268,7 @@ const Reports = () => {
           </div>
         )}
 
-        {/* LISTA DE ATENDIMENTOS (CLEAN) */}
+        {/* LISTA DE ATENDIMENTOS */}
         <div className="grid grid-cols-1 gap-4">
           {services.map((service) => (
             <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
@@ -257,78 +290,62 @@ const Reports = () => {
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Gerar PDF</>}
               </Button>
 
-              {/* ESTRUTURA DO LAUDO (FORA DA TELA) */}
+              {/* TEMPLATES OCULTOS PARA CAPTURA */}
               <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
-                <div id={`report-container-${service.id}`} style={{ width: "210mm", background: "#ffffff", color: "#000000" }}>
-                  <div style={{ width: "100%", position: "relative" }}>
-                    
-                    {/* Timbre Background */}
-                    <div style={{ padding: "0", position: "relative" }}>
-                      <img src="/src/assets/timbre.png" style={{ width: "100%", height: "auto", display: "block" }} />
-                      
-                      {/* Conteúdo sobreposto ao timbre */}
-                      <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", padding: "0 20mm" }}>
-                        
-                        {/* Cabeçalho do Paciente (Justinho abaixo da linha do timbre) */}
-                        <div style={{ 
-                          marginTop: "36mm", // Ajuste preciso para ficar logo abaixo da linha do timbre sem tocar
-                          padding: "0", 
-                          fontFamily: '"Times New Roman", serif', 
-                          fontSize: "9.5pt",
-                          lineHeight: "1.2",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "2px"
-                        }}>
-                          <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <div style={{ flex: 1 }}><strong>NOME:</strong> {selectedPatient.full_name.toUpperCase()}</div>
-                            <div style={{ width: "60mm" }}><strong>REGISTRO:</strong> #{service.id.slice(0, 8).toUpperCase()}</div>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "flex-start", gap: "15mm" }}>
-                            <div><strong>CPF:</strong> {selectedPatient.cpf}</div>
-                            <div><strong>IDADE:</strong> {differenceInYears(new Date(), new Date(selectedPatient.birth_date))} ANOS</div>
-                            <div><strong>DN:</strong> {format(new Date(selectedPatient.birth_date), "dd/MM/yyyy")}</div>
-                          </div>
-                        </div>
+                {/* 1. Timbre Puro */}
+                <div id="timbre-template" style={{ width: "210mm", height: "297mm", background: "#ffffff" }}>
+                  <img src="/src/assets/timbre.png" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                </div>
 
-                        {/* Exames por Setor */}
-                        <div style={{ marginTop: "8mm", fontFamily: '"Times New Roman", serif' }}>
-                          {Object.entries(groupedExams(service.service_exams)).map(([sector, exams]) => (
-                            <div key={sector} style={{ marginBottom: "8mm", pageBreakInside: "avoid" }}>
-                              <div style={{ 
-                                fontSize: "9pt", 
-                                fontWeight: "bold", 
-                                textAlign: "center", 
-                                textDecoration: "underline", 
-                                marginBottom: "3mm",
-                                textTransform: "uppercase"
-                              }}>
-                                {sector}
-                              </div>
-                              
-                              {exams.map((se: any) => (
-                                <div key={se.id} style={{ marginBottom: "5mm", pageBreakInside: "avoid" }}>
-                                  <div style={{ fontSize: "10.5pt", fontWeight: "bold", marginBottom: "1.5mm", textTransform: "uppercase" }}>
-                                    {se.exams?.name}
-                                  </div>
-                                  <div style={{ fontSize: "9.5pt", whiteSpace: "pre-wrap", lineHeight: "1.3" }}>
-                                    {se.result_value?.split('\n').map((line: string, i: number) => {
-                                      const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:") || line.toLowerCase().includes("vr:");
-                                      return (
-                                        <div key={i} style={{ fontSize: isRef ? "7.5pt" : "9.5pt", color: isRef ? "#444" : "#000", marginTop: isRef ? "0.5mm" : "0" }}>
-                                          {line}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                {/* 2. Cabeçalho do Paciente */}
+                <div id={`header-template-${service.id}`} style={{ width: "170mm", padding: "2mm 0", fontFamily: '"Times New Roman", serif' }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10pt", marginBottom: "1mm" }}>
+                    <div style={{ flex: 1 }}><strong>NOME:</strong> {selectedPatient.full_name.toUpperCase()}</div>
+                    <div style={{ width: "50mm", textAlign: "right" }}><strong>REGISTRO:</strong> #{service.id.slice(0, 8).toUpperCase()}</div>
                   </div>
+                  <div style={{ display: "flex", justifyContent: "flex-start", gap: "10mm", fontSize: "9pt" }}>
+                    <div><strong>CPF:</strong> {selectedPatient.cpf}</div>
+                    <div><strong>IDADE:</strong> {differenceInYears(new Date(), new Date(selectedPatient.birth_date))} ANOS</div>
+                    <div><strong>DN:</strong> {format(new Date(selectedPatient.birth_date), "dd/MM/yyyy")}</div>
+                  </div>
+                </div>
+
+                {/* 3. Conteúdo dos Exames */}
+                <div id={`content-template-${service.id}`} style={{ width: "170mm", fontFamily: '"Times New Roman", serif' }}>
+                  {Object.entries(groupedExams(service.service_exams)).map(([sector, exams]) => (
+                    <div key={sector} style={{ marginBottom: "6mm" }}>
+                      {sector !== "OUTROS" && (
+                        <div style={{ 
+                          fontSize: "9pt", 
+                          fontWeight: "bold", 
+                          textAlign: "center", 
+                          textDecoration: "underline", 
+                          marginBottom: "3mm",
+                          textTransform: "uppercase"
+                        }}>
+                          {sector}
+                        </div>
+                      )}
+                      
+                      {exams.map((se: any) => (
+                        <div key={se.id} style={{ marginBottom: "5mm" }}>
+                          <div style={{ fontSize: "10pt", fontWeight: "bold", marginBottom: "1mm", textTransform: "uppercase" }}>
+                            {se.exams?.name}
+                          </div>
+                          <div style={{ fontSize: "9pt", whiteSpace: "pre-wrap", lineHeight: "1.2" }}>
+                            {se.result_value?.split('\n').map((line: string, i: number) => {
+                              const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:") || line.toLowerCase().includes("vr:");
+                              return (
+                                <div key={i} style={{ fontSize: isRef ? "7pt" : "9pt", color: isRef ? "#555" : "#000", marginTop: isRef ? "0.5mm" : "0" }}>
+                                  {line}
+                                }
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
