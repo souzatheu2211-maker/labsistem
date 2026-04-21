@@ -107,40 +107,35 @@ const styles = StyleSheet.create({
 });
 
 /**
- * MOTOR DE FORMATAÇÃO DE LAUDO
- * Aplica as regras de limpeza profunda e substituição de placeholders
+ * MOTOR DE FORMATAÇÃO DE LAUDO V2
+ * Focado em fidelidade de layout e limpeza absoluta
  */
 const formatFinalReport = (text: string) => {
   if (!text) return [];
 
-  return text.split('\n').map(line => {
-    // 1. Remover placeholders (?) e (&)
-    let cleaned = line.replace(/\(\s*[?&]\s*\)/g, '').trim();
-    
-    // 2. Remover lixo visual comum (sequências de underscores, interrogações, etc)
-    cleaned = cleaned.replace(/_{2,}/g, '');
-    cleaned = cleaned.replace(/\?{2,}/g, '');
-    
-    // 3. Remover espaços duplicados
-    cleaned = cleaned.replace(/\s{2,}/g, ' ');
+  // Unidades comuns para detecção de linhas órfãs
+  const units = ['mg/dl', 'U/L', 'g/dL', 'mm/h', 'pg', 'fL', 'mcg/dL', 'ng/mL', 'mUI/L', 'mEq/L', 'mmol/L'];
 
-    // 4. Regra de Símbolos Soltos: Se a linha contém apenas unidades ou labels sem valor real
-    // Ex: "Glicose: mg/dl" -> vira apenas "Glicose:" ou é removida se for irrelevante
-    const units = ['mg/dl', 'U/L', 'g/dL', 'mm/h', 'pg', 'fL', 'mcg/dL', 'ng/mL', 'mUI/L'];
-    const hasUnit = units.some(u => cleaned.toLowerCase().includes(u.toLowerCase()));
+  return text.split('\n').map(line => {
+    // 1. Limpeza de placeholders e lixo visual
+    let cleaned = line
+      .replace(/\(\s*[?&]\s*\)/g, '') // Remove (?) e (&)
+      .replace(/_{2,}/g, '')          // Remove ___
+      .replace(/\?{2,}/g, '')         // Remove ???
+      .replace(/\s{2,}/g, ' ')        // Remove espaços duplos
+      .trim();
     
-    // Se a linha tem unidade mas não tem números ou palavras de resultado (como 'reagente'), limpamos a unidade
+    // 2. Detecção de linhas que ficaram apenas com a unidade (lixo visual)
+    const hasUnit = units.some(u => cleaned.toLowerCase().includes(u.toLowerCase()));
     const hasValue = /[0-9]/.test(cleaned) || /reagente|positivo|negativo|ausência|presença/i.test(cleaned);
     
+    // Se tem unidade mas não tem valor real, limpamos a linha para evitar "Glicose: mg/dL"
     if (hasUnit && !hasValue) {
-      units.forEach(u => {
-        const reg = new RegExp(`\\s*${u.replace('/', '\\/')}`, 'gi');
-        cleaned = cleaned.replace(reg, '');
-      });
+      cleaned = "";
     }
 
-    return cleaned.trim();
-  }).filter(line => line.length > 0); // Remove linhas que ficaram totalmente vazias
+    return cleaned;
+  }); // NÃO filtramos linhas vazias para manter o espaçamento original
 };
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
@@ -192,6 +187,9 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
                   {formatFinalReport(se.result_value || "").map((line: string, i: number) => {
+                    // Se a linha for vazia, renderizamos um espaço para manter a altura da quebra de linha
+                    if (line === "") return <Text key={i} style={{ height: 11 }}> </Text>;
+
                     const isRef = line.toLowerCase().includes("referência") || 
                                   line.toLowerCase().includes("ref:") || 
                                   line.toLowerCase().includes("valor:") || 
