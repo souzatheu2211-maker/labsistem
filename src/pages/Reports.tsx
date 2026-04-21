@@ -91,25 +91,24 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     paddingVertical: 3,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#eee',
+    minHeight: 15, // Garante espaçamento mesmo em linhas vazias
   },
   cellText: {
     fontSize: 10,
     fontFamily: 'Times-Roman',
   },
   examTitle: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: 'Times-Bold',
-    marginTop: 15,
-    marginBottom: 5,
+    marginTop: 20,
+    marginBottom: 10,
     textTransform: 'uppercase',
-    backgroundColor: '#f9f9f9',
-    padding: 3,
+    textAlign: 'center',
+    textDecoration: 'underline'
   }
 });
 
-const LabReportPDF = ({ service, patient, results, references }: { service: any, patient: any, results: any[], references: any[] }) => {
+const LabReportPDF = ({ service, patient, reportData }: { service: any, patient: any, reportData: any[] }) => {
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
 
   return (
@@ -130,46 +129,36 @@ const LabReportPDF = ({ service, patient, results, references }: { service: any,
           </View>
         </View>
 
-        {/* Listagem de Exames baseada em Referências */}
-        {service.service_exams.map((se: any) => {
-          const examRefs = references.filter(rf => rf.exam_id === se.exam_id);
-          
-          // Só exibe o exame se ele tiver referências configuradas
-          if (examRefs.length === 0) return null;
-
-          return (
-            <View key={se.id} wrap={false}>
-              <Text style={styles.examTitle}>{se.exams?.name}</Text>
-              
-              <View style={styles.tableHeader}>
-                <Text style={[styles.headerText, { width: '40%' }]}>Parâmetro</Text>
-                <Text style={[styles.headerText, { width: '30%' }]}>Resultado</Text>
-                <Text style={[styles.headerText, { width: '30%' }]}>Referência</Text>
-              </View>
-
-              {examRefs.map((ref: any, idx: number) => {
-                // Busca o resultado lançado para este parâmetro específico
-                const result = results.find(r => r.service_exam_id === se.id && r.parameter_name === ref.parameter);
-                
-                const refValue = patient.gender === 'masculino' ? ref.male_ref : 
-                                 patient.gender === 'feminino' ? ref.female_ref : 
-                                 ref.general_ref;
-                
-                return (
-                  <View key={idx} style={styles.row}>
-                    <Text style={[styles.cellText, { width: '40%' }]}>{ref.parameter}</Text>
-                    <Text style={[styles.cellText, { width: '30%', fontFamily: 'Times-Bold' }]}>
-                      {result?.value || '---'} {ref.unit || ''}
-                    </Text>
-                    <Text style={[styles.cellText, { width: '30%', fontSize: 9, color: '#444' }]}>
-                      {refValue || ''} {ref.unit || ''}
-                    </Text>
-                  </View>
-                );
-              })}
+        {/* Conteúdo dos Pré-Modelos */}
+        {reportData.map((report: any, rIdx: number) => (
+          <View key={rIdx} wrap={false}>
+            <Text style={styles.examTitle}>{report.name}</Text>
+            
+            <View style={styles.tableHeader}>
+              <Text style={[styles.headerText, { width: '40%' }]}>Parâmetro</Text>
+              <Text style={[styles.headerText, { width: '25%' }]}>Resultado</Text>
+              <Text style={[styles.headerText, { width: '35%' }]}>Valores de Referência</Text>
             </View>
-          );
-        })}
+
+            {report.items.map((item: any, iIdx: number) => {
+              const refValue = patient.gender === 'masculino' ? item.ref_male : 
+                               patient.gender === 'feminino' ? item.ref_female : 
+                               item.ref_general;
+              
+              return (
+                <View key={iIdx} style={styles.row}>
+                  <Text style={[styles.cellText, { width: '40%' }]}>{item.parameter}</Text>
+                  <Text style={[styles.cellText, { width: '25%', fontFamily: 'Times-Bold' }]}>
+                    {item.result || ''} {item.unit || ''}
+                  </Text>
+                  <Text style={[styles.cellText, { width: '35%', fontSize: 9 }]}>
+                    {refValue || ''} {item.unit || ''}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ))}
       </Page>
     </Document>
   );
@@ -181,8 +170,7 @@ const Reports = () => {
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
-  const [allResults, setAllResults] = useState<any[]>([]);
-  const [allReferences, setAllReferences] = useState<any[]>([]);
+  const [reportDataMap, setReportDataMap] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     if (search.length > 2) {
@@ -217,17 +205,27 @@ const Reports = () => {
     
     setServices(srvs || []);
 
-    if (srvs && srvs.length > 0) {
-      const serviceExamIds = srvs.flatMap(s => s.service_exams.map((se: any) => se.id));
-      const examIds = srvs.flatMap(s => s.service_exams.map((se: any) => se.exams.id));
+    if (srvs) {
+      const newReportDataMap: Record<string, any[]> = {};
+      
+      for (const service of srvs) {
+        const examIds = service.service_exams.map((se: any) => se.exam_id);
+        
+        // Busca os pré-modelos vinculados aos exames deste atendimento
+        const { data: reports } = await supabase
+          .from('pre_reports')
+          .select('*, pre_report_items (*)')
+          .in('exam_id', examIds)
+          .order('order_index');
 
-      const [resData, refData] = await Promise.all([
-        supabase.from('service_exam_results').select('*').in('service_exam_id', serviceExamIds),
-        supabase.from('reference_values').select('*').in('exam_id', examIds)
-      ]);
-
-      setAllResults(resData.data || []);
-      setAllReferences(refData.data || []);
+        if (reports) {
+          newReportDataMap[service.id] = reports.map(r => ({
+            name: r.name,
+            items: r.pre_report_items.sort((a: any, b: any) => a.line_order - b.line_order)
+          }));
+        }
+      }
+      setReportDataMap(newReportDataMap);
     }
   };
 
@@ -237,9 +235,9 @@ const Reports = () => {
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
             <Printer className="w-6 h-6 text-blue-400" />
-            Impressão de Laudos Estruturados
+            Impressão de Laudos (Pré-Modelos)
           </h1>
-          <p className="text-blue-300/50 text-sm mt-1 font-medium">Geração de PDFs baseada em dados reais e referências oficiais</p>
+          <p className="text-blue-300/50 text-sm mt-1 font-medium">Geração de PDFs baseada nos templates e espaçamentos originais</p>
         </div>
 
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">
@@ -283,9 +281,7 @@ const Reports = () => {
 
         <div className="grid grid-cols-1 gap-4">
           {services.map((service) => {
-            // Verifica se existem referências para os exames deste atendimento
-            const serviceExamIds = service.service_exams.map((se: any) => se.id);
-            const hasResults = allResults.some(r => serviceExamIds.includes(r.service_exam_id));
+            const reportData = reportDataMap[service.id] || [];
             
             return (
               <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
@@ -295,38 +291,25 @@ const Reports = () => {
                     <h3 className="text-white font-bold uppercase text-sm">Atendimento de {formatSafeDate(service.created_at)}</h3>
                     <div className="flex items-center gap-3 mt-1">
                       <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">Registro: #{service.id.slice(0, 8).toUpperCase()}</p>
-                      <span className={cn(
-                        "text-[8px] font-black px-2 py-0.5 rounded-full uppercase",
-                        service.status === 'finalizado' ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
-                      )}>
-                        {service.status}
-                      </span>
                     </div>
                   </div>
                 </div>
                 
-                {hasResults ? (
+                {reportData.length > 0 ? (
                   <PDFDownloadLink 
-                    document={
-                      <LabReportPDF 
-                        service={service} 
-                        patient={selectedPatient} 
-                        results={allResults} 
-                        references={allReferences} 
-                      />
-                    } 
+                    document={<LabReportPDF service={service} patient={selectedPatient} reportData={reportData} />} 
                     fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}.pdf`}
                   >
                     {({ loading: pdfLoading }) => (
                       <Button className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-blue-900/20" disabled={pdfLoading}>
-                        {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar Laudo Oficial</>}
+                        {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar Laudo (Modelo)</>}
                       </Button>
                     )}
                   </PDFDownloadLink>
                 ) : (
                   <div className="flex items-center gap-2 text-amber-400/50 text-[10px] font-bold uppercase">
                     <AlertCircle className="w-4 h-4" />
-                    Sem resultados lançados
+                    Sem modelo vinculado
                   </div>
                 )}
               </div>
