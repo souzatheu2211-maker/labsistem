@@ -12,7 +12,7 @@ import {
   Download,
   Printer
 } from "lucide-react";
-import { Button } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showSuccess, showError } from "@/utils/toast";
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Times-Roman',
     lineHeight: 1.2,
     color: '#000000',
-    whiteSpace: 'pre-wrap', // Tenta preservar espaços se o renderer suportar
+    whiteSpace: 'pre-wrap',
   },
   referenceText: {
     fontSize: 9,
@@ -129,13 +129,12 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
 
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
 
-  // Limpeza absoluta de marcadores sem colapsar espaços ou quebras de linha
   const cleanVisualTrash = (text: string) => {
     if (!text) return "";
     return text
-      .replace(/\(\s*[?&]\s*\)/g, '') // Remove (?), (&), ( ? ), etc.
-      .replace(/[?&]{2,}/g, '')       // Remove sequências como ???? ou &&&&
-      .replace(/\(\s*\)/g, '');       // Remove parênteses vazios residuais
+      .replace(/\(\s*[?&]\s*\)/g, '')
+      .replace(/[?&]{2,}/g, '')
+      .replace(/\(\s*\)/g, '');
   };
 
   return (
@@ -166,7 +165,6 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                   <Text style={styles.examName}>{se.exams?.name}</Text>
                   {cleanVisualTrash(se.result_value || "")
                     .split('\n').map((line: string, i: number) => {
-                    // Se a linha for vazia, renderiza um espaço para manter a quebra de linha original
                     if (line.trim() === "") return <Text key={i} style={{ height: 11 }}> </Text>;
 
                     const isRef = line.toLowerCase().includes("referência") || 
