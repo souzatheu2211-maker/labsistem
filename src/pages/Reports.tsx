@@ -26,120 +26,121 @@ import {
   Image
 } from "@react-pdf/renderer";
 
-// Dimensões A4 em pontos (pt): 595.28 x 841.89
-// 1mm = 2.834pt
+// Dimensões A4: 210mm x 297mm
+// No react-pdf, 1pt = 1/72 polegada. 1mm = 2.834pt.
+// Largura A4: 595.28pt | Altura A4: 841.89pt
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 190, // Espaço para o cabeçalho fixo
-    paddingBottom: 100,
+    paddingTop: 180, // Espaço exato para o cabeçalho fixo (Timbre + Info)
+    paddingBottom: 80,
     paddingHorizontal: 50,
     fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
-    color: '#000000',
   },
-  fixedHeader: {
+  headerContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 180,
+    height: 170,
     paddingHorizontal: 50,
+    paddingTop: 15,
   },
-  timbreContainer: {
+  timbreWrapper: {
     width: '100%',
-    height: 120, // Altura fixa para o timbre (~42mm)
-    marginTop: 10,
+    height: 110, // Altura fixa entre 35mm e 45mm (~113pt)
+    marginBottom: 5,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timbre: {
+  timbreImage: {
     width: '100%',
     height: '100%',
-    objectFit: 'contain', // PRESERVA PROPORÇÃO ORIGINAL SEM ESTICAR
+    objectFit: 'contain', // CRÍTICO: Mantém a proporção original sem distorcer
   },
-  patientInfoContainer: {
+  patientBox: {
     width: '100%',
     borderTopWidth: 1,
     borderTopColor: '#000000',
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#cccccc',
-    paddingVertical: 8,
-    marginTop: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#000000',
+    paddingVertical: 6,
+    marginTop: 2,
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  patientLabel: {
+  label: {
     fontSize: 9,
     fontWeight: 'bold',
     textTransform: 'uppercase',
   },
-  patientValue: {
+  value: {
     fontSize: 10,
     fontWeight: 'normal',
-  },
-  patientSubRow: {
-    flexDirection: 'row',
-    gap: 30,
   },
   content: {
     marginTop: 10,
   },
-  sectorTitle: {
-    fontSize: 10,
+  sectorHeader: {
+    fontSize: 11,
     fontWeight: 'bold',
     textAlign: 'center',
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 3,
+    backgroundColor: '#f2f2f2',
+    paddingVertical: 4,
     marginTop: 15,
     marginBottom: 10,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  examBlock: {
-    marginBottom: 15,
+  examContainer: {
+    marginBottom: 20,
   },
-  examName: {
+  examTitle: {
     fontSize: 10,
     fontWeight: 'bold',
-    marginBottom: 5,
-    textTransform: 'uppercase',
     textDecoration: 'underline',
+    marginBottom: 6,
+    textTransform: 'uppercase',
   },
-  resultText: {
+  resultLine: {
     fontSize: 10,
-    lineHeight: 1.4,
+    lineHeight: 1.5,
+    color: '#000000',
   },
-  referenceText: {
+  referenceLine: {
     fontSize: 8,
-    color: '#666666',
+    color: '#555555',
     marginTop: 2,
     fontStyle: 'italic',
   },
-  signatureArea: {
+  signatureContainer: {
     position: 'absolute',
-    bottom: 110,
+    bottom: 90,
     left: 0,
     right: 0,
     alignItems: 'center',
   },
-  signatureLine: {
+  line: {
     width: 200,
     borderTopWidth: 0.5,
     borderTopColor: '#000000',
     marginBottom: 4,
   },
-  signatureText: {
+  signatureName: {
     fontSize: 9,
-    textAlign: 'center',
     fontWeight: 'bold',
+  },
+  signatureRole: {
+    fontSize: 7,
+    color: '#333333',
   },
   footer: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 30,
     left: 0,
     right: 0,
     textAlign: 'center',
@@ -147,7 +148,7 @@ const styles = StyleSheet.create({
     color: '#999999',
     borderTopWidth: 0.5,
     borderTopColor: '#eeeeee',
-    paddingTop: 10,
+    paddingTop: 8,
   }
 });
 
@@ -177,19 +178,19 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
         {/* Cabeçalho Fixo em Todas as Páginas */}
-        <View fixed style={styles.fixedHeader}>
-          <View style={styles.timbreContainer}>
-            <Image src={timbreUrl} style={styles.timbre} />
+        <View fixed style={styles.headerContainer}>
+          <View style={styles.timbreWrapper}>
+            <Image src={timbreUrl} style={styles.timbreImage} />
           </View>
-          <View style={styles.patientInfoContainer}>
+          <View style={styles.patientBox}>
             <View style={styles.patientRow}>
-              <Text style={styles.patientLabel}>Paciente: <Text style={styles.patientValue}>{patient.full_name.toUpperCase()}</Text></Text>
-              <Text style={styles.patientLabel}>Registro: <Text style={styles.patientValue}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
+              <Text style={styles.label}>Paciente: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
+              <Text style={styles.label}>Registro: <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
             </View>
-            <View style={styles.patientSubRow}>
-              <Text style={styles.patientLabel}>CPF: <Text style={styles.patientValue}>{patient.cpf}</Text></Text>
-              <Text style={styles.patientLabel}>Idade: <Text style={styles.patientValue}>{differenceInYears(new Date(), new Date(patient.birth_date))} Anos</Text></Text>
-              <Text style={styles.patientLabel}>Data: <Text style={styles.patientValue}>{format(new Date(service.created_at), "dd/MM/yyyy")}</Text></Text>
+            <View style={styles.patientRow}>
+              <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
+              <Text style={styles.label}>Idade: <Text style={styles.value}>{differenceInYears(new Date(), new Date(patient.birth_date))} Anos</Text></Text>
+              <Text style={styles.label}>Data: <Text style={styles.value}>{format(new Date(service.created_at), "dd/MM/yyyy")}</Text></Text>
             </View>
           </View>
         </View>
@@ -201,19 +202,19 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
             
             return (
               <View key={sector} wrap={false}>
-                <Text style={styles.sectorTitle}>{sector}</Text>
+                <Text style={styles.sectorHeader}>{sector}</Text>
                 {groups[sector].map((se: any) => (
-                  <View key={se.id} style={styles.examBlock}>
-                    <Text style={styles.examName}>{se.exams?.name}</Text>
-                    {/* Limpeza de placeholders (?) residuais */}
+                  <View key={se.id} style={styles.examContainer}>
+                    <Text style={styles.examTitle}>{se.exams?.name}</Text>
+                    {/* Limpeza rigorosa de placeholders (?) */}
                     {se.result_value?.replace(/\(\?\)/g, '').split('\n').map((line: string, i: number) => {
                       const isRef = line.toLowerCase().includes("referência") || 
                                     line.toLowerCase().includes("ref:") || 
                                     line.toLowerCase().includes("valor:") || 
                                     line.toLowerCase().includes("vr:");
                       return (
-                        <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
-                          {line}
+                        <Text key={i} style={isRef ? styles.referenceLine : styles.resultLine}>
+                          {line.trim()}
                         </Text>
                       );
                     })}
@@ -225,13 +226,13 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
         </View>
 
         {/* Assinatura Fixa */}
-        <View style={styles.signatureArea} fixed>
-          <View style={styles.signatureLine} />
-          <Text style={styles.signatureText}>Matheus Souza</Text>
-          <Text style={[styles.signatureText, { fontWeight: 'normal', fontSize: 7 }]}>Técnico em Patologia Clínica • CRF-BA 805.994</Text>
+        <View style={styles.signatureContainer} fixed>
+          <View style={styles.line} />
+          <Text style={styles.signatureName}>Matheus Souza</Text>
+          <Text style={styles.signatureRole}>Técnico em Patologia Clínica • CRF-BA 805.994</Text>
         </View>
 
-        {/* Rodapé */}
+        {/* Rodapé Fixo */}
         <Text 
           style={styles.footer} 
           render={({ pageNumber, totalPages }) => (
