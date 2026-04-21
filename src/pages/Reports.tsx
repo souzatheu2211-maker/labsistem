@@ -96,7 +96,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Times-Roman',
     lineHeight: 1.2,
     color: '#000000',
-    whiteSpace: 'pre-wrap',
   },
   referenceText: {
     fontSize: 9,
@@ -129,12 +128,16 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
 
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
 
+  // Limpeza profunda de qualquer "lixo" visual de placeholders
   const cleanVisualTrash = (text: string) => {
     if (!text) return "";
     return text
-      .replace(/\(\s*[?&]\s*\)/g, '')
-      .replace(/[?&]{2,}/g, '')
-      .replace(/\(\s*\)/g, '');
+      .replace(/\(\s*\?\s*\)/g, '') // Remove (?)
+      .replace(/\(\s*&\s*\)/g, '') // Remove (&)
+      .replace(/_{2,}/g, '')       // Remove underscores excessivos (___)
+      .replace(/\?{2,}/g, '')      // Remove interrogações excessivas (??)
+      .replace(/&{2,}/g, '')       // Remove ampersands excessivos (&&)
+      .replace(/\(\s*\)/g, '');    // Remove parênteses vazios ()
   };
 
   return (
@@ -163,20 +166,23 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
               {groups[sector].map((se: any) => (
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
-                  {cleanVisualTrash(se.result_value || "")
-                    .split('\n').map((line: string, i: number) => {
-                    if (line.trim() === "") return <Text key={i} style={{ height: 11 }}> </Text>;
+                  {se.result_value?.split('\n').map((line: string, i: number) => {
+                    const cleanedLine = cleanVisualTrash(line);
+                    
+                    // Se a linha ficar vazia após a limpeza, mas existia no original, mantemos o espaço vertical
+                    if (cleanedLine.trim() === "" && line.trim() !== "") return <Text key={i} style={{ height: 11 }}> </Text>;
+                    if (cleanedLine.trim() === "") return null;
 
-                    const isRef = line.toLowerCase().includes("referência") || 
-                                  line.toLowerCase().includes("ref:") || 
-                                  line.toLowerCase().includes("valor:") || 
-                                  line.toLowerCase().includes("vr:") ||
-                                  line.toLowerCase().includes("normal:") ||
-                                  line.toLowerCase().includes("desejável:");
+                    const isRef = cleanedLine.toLowerCase().includes("referência") || 
+                                  cleanedLine.toLowerCase().includes("ref:") || 
+                                  cleanedLine.toLowerCase().includes("valor:") || 
+                                  cleanedLine.toLowerCase().includes("vr:") ||
+                                  cleanedLine.toLowerCase().includes("normal:") ||
+                                  cleanedLine.toLowerCase().includes("desejável:");
                     
                     return (
                       <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
-                        {line}
+                        {cleanedLine}
                       </Text>
                     );
                   })}
