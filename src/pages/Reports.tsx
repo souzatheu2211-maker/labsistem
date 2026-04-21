@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
   Search,
-  FileText,
   User,
   Loader2,
   CheckCircle2,
@@ -15,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { showSuccess, showError } from "@/utils/toast";
 import { format, parseISO } from "date-fns";
 import { 
   Document, 
@@ -64,118 +62,55 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   label: {
-    fontSize: 12, 
+    fontSize: 11, 
     fontFamily: 'Times-Bold',
   },
   value: {
-    fontSize: 12, 
+    fontSize: 11, 
     fontFamily: 'Times-Roman',
   },
-  sectorTitle: {
-    fontSize: 11,
-    fontFamily: 'Times-Bold',
-    textAlign: 'center',
-    textDecoration: 'underline',
+  tableHeader: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#000',
+    paddingBottom: 3,
     marginTop: 15,
-    marginBottom: 10,
+    marginBottom: 5,
+  },
+  headerText: {
+    fontSize: 10,
+    fontFamily: 'Times-Bold',
     textTransform: 'uppercase',
   },
-  examBlock: {
-    marginBottom: 15, 
+  row: {
+    flexDirection: 'row',
+    paddingVertical: 3,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#eee',
   },
-  examName: {
+  cellText: {
+    fontSize: 10,
+    fontFamily: 'Times-Roman',
+  },
+  examTitle: {
     fontSize: 11,
     fontFamily: 'Times-Bold',
-    marginBottom: 4,
+    marginTop: 15,
+    marginBottom: 5,
     textTransform: 'uppercase',
-  },
-  resultText: {
-    fontSize: 11,
-    fontFamily: 'Times-Roman',
-    lineHeight: 1.2,
-    color: '#000000',
-  },
-  referenceText: {
-    fontSize: 9,
-    fontFamily: 'Times-Roman',
-    color: '#333333',
-    marginTop: 1,
-    lineHeight: 1.2,
+    backgroundColor: '#f9f9f9',
+    padding: 3,
   }
 });
 
-const formatFinalReport = (text: string) => {
-  if (!text) return [];
-  const lines = text.split('\n');
-  const cleanedLines: string[] = [];
-  let skipMode = false;
-
-  const units = ['mg/dl', 'u/l', 'g/dl', 'mm/h', 'pg', 'fl', 'mcg/dl', 'ng/ml', 'mui/l', 'meq/l', 'mmol/l', '%', 'mil/mm', 'por/mm'];
-  const resultKeywords = ['reagente', 'positivo', 'negativo', 'ausência', 'presença', 'não reagente', 'normal', 'alterada'];
-
-  for (let line of lines) {
-    let rawLine = line.trim();
-    
-    // Se a linha for vazia, mantém apenas se não estivermos em skipMode
-    if (!rawLine) {
-      if (!skipMode) cleanedLines.push("");
-      continue;
-    }
-
-    // Detectar se é uma linha de resultado (tem : ou ____)
-    const isResultLine = rawLine.includes(':') || rawLine.includes('____');
-    
-    if (isResultLine) {
-      // Limpar o marcador
-      let processed = rawLine.replace(/____/g, '').trim();
-      
-      // Verificar se tem valor real (número ou palavra-chave)
-      const hasValue = /[0-9]/.test(processed) || resultKeywords.some(k => processed.toLowerCase().includes(k));
-      
-      // Se a linha termina com unidade mas não tem número, é considerada vazia
-      const hasUnitOnly = units.some(u => processed.toLowerCase().endsWith(u)) && !hasValue;
-
-      if (!hasValue || hasUnitOnly) {
-        skipMode = true; // Entra no modo de pular referências deste resultado
-        continue;
-      } else {
-        skipMode = false;
-        cleanedLines.push(processed.replace(/\s{2,}/g, ' '));
-      }
-    } else {
-      // É uma linha de referência ou cabeçalho
-      if (skipMode) continue; // Pula se o resultado anterior estava vazio
-      
-      // Se for uma linha de "Valor de Referência" ou similar, e não estamos pulando, mantém
-      cleanedLines.push(rawLine.replace(/\s{2,}/g, ' '));
-    }
-  }
-
-  // Remove linhas vazias duplicadas no final
-  return cleanedLines.filter((line, index) => !(line === "" && cleanedLines[index - 1] === ""));
-};
-
-const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
-  const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA"];
-  
-  const getSector = (examName: string) => {
-    const name = examName.toUpperCase();
-    if (name.includes("HEMOGRAMA") || name.includes("SANGUE")) return "HEMATOLOGIA";
-    if (name.includes("GLICOSE") || name.includes("GLICEMIA") || name.includes("COLESTEROL") || name.includes("TRIGLI") || name.includes("UREIA") || name.includes("CREATININA") || name.includes("TGO") || name.includes("TGP") || name.includes("HBA1C") || name.includes("GLICADA")) return "BIOQUÍMICA";
-    if (name.includes("URINA") || name.includes("EAS")) return "URINÁLISE";
-    if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
-    if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
-    return "HEMATOLOGIA";
-  };
-
-  const groups: { [key: string]: any[] } = {};
-  service.service_exams.forEach((se: any) => {
-    const sector = getSector(se.exams?.name || "");
-    if (!groups[sector]) groups[sector] = [];
-    groups[sector].push(se);
-  });
-
+const LabReportPDF = ({ service, patient, results }: { service: any, patient: any, results: any[] }) => {
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
+
+  // Agrupar resultados por exame
+  const examsWithResults = service.service_exams.map((se: any) => {
+    const examResults = results.filter(r => r.service_exam_id === se.id);
+    return { ...se, results: examResults };
+  }).filter((e: any) => e.results.length > 0);
 
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
@@ -194,33 +129,36 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
           </View>
         </View>
 
-        {sectorOrder.map(sector => {
-          if (!groups[sector]) return null;
-          
-          const sectorContent = groups[sector].map((se: any) => {
-            const lines = formatFinalReport(se.result_value || "");
-            if (lines.length === 0) return null;
-            return (
-              <View key={se.id} style={styles.examBlock} wrap={false}>
-                <Text style={styles.examName}>{se.exams?.name}</Text>
-                {lines.map((line: string, i: number) => {
-                  if (line === "") return <Text key={i} style={{ height: 11 }}> </Text>;
-                  const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:") || line.toLowerCase().includes("vr:") || line.toLowerCase().includes("normal") || line.toLowerCase().includes("desejável");
-                  return <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>{line}</Text>;
-                })}
-              </View>
-            );
-          }).filter(Boolean);
-
-          if (sectorContent.length === 0) return null;
-
-          return (
-            <View key={sector} wrap={false}>
-              <Text style={styles.sectorTitle}>{sector}</Text>
-              {sectorContent}
+        {examsWithResults.map((exam: any) => (
+          <View key={exam.id} wrap={false}>
+            <Text style={styles.examTitle}>{exam.exams?.name}</Text>
+            
+            <View style={styles.tableHeader}>
+              <Text style={[styles.headerText, { width: '40%' }]}>Parâmetro</Text>
+              <Text style={[styles.headerText, { width: '30%' }]}>Resultado</Text>
+              <Text style={[styles.headerText, { width: '30%' }]}>Referência</Text>
             </View>
-          );
-        })}
+
+            {exam.results.map((res: any, idx: number) => {
+              const ref = res.reference;
+              const refValue = patient.gender === 'masculino' ? ref?.male_ref : 
+                               patient.gender === 'feminino' ? ref?.female_ref : 
+                               ref?.general_ref;
+              
+              return (
+                <View key={idx} style={styles.row}>
+                  <Text style={[styles.cellText, { width: '40%' }]}>{res.parameter_name}</Text>
+                  <Text style={[styles.cellText, { width: '30%', fontFamily: 'Times-Bold' }]}>
+                    {res.value || ''} {ref?.unit || ''}
+                  </Text>
+                  <Text style={[styles.cellText, { width: '30%', fontSize: 9, color: '#444' }]}>
+                    {refValue || ''} {ref?.unit || ''}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ))}
       </Page>
     </Document>
   );
@@ -232,6 +170,7 @@ const Reports = () => {
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
+  const [allResults, setAllResults] = useState<any[]>([]);
 
   useEffect(() => {
     if (search.length > 2) {
@@ -257,13 +196,36 @@ const Reports = () => {
     setSelectedPatient(patient);
     setPatients([]);
     setSearch("");
-    const { data } = await supabase
+    
+    // Buscar atendimentos finalizados
+    const { data: srvs } = await supabase
       .from("services")
-      .select(`*, service_exams (*, exams (name))`)
+      .select(`*, service_exams (*, exams (id, name))`)
       .eq("patient_id", patient.id)
       .eq("status", "finalizado")
       .order("created_at", { ascending: false });
-    setServices(data || []);
+    
+    setServices(srvs || []);
+
+    if (srvs && srvs.length > 0) {
+      const serviceExamIds = srvs.flatMap(s => s.service_exams.map((se: any) => se.id));
+      const examIds = srvs.flatMap(s => s.service_exams.map((se: any) => se.exams.id));
+
+      // Buscar resultados estruturados e referências
+      const [resData, refData] = await Promise.all([
+        supabase.from('service_exam_results').select('*').in('service_exam_id', serviceExamIds),
+        supabase.from('reference_values').select('*').in('exam_id', examIds)
+      ]);
+
+      // Mapear resultados com suas referências
+      const mappedResults = resData.data?.map(r => {
+        const serviceExam = srvs.flatMap(s => s.service_exams).find((se: any) => se.id === r.service_exam_id);
+        const ref = refData.data?.find(rf => rf.exam_id === serviceExam?.exam_id && rf.parameter === r.parameter_name);
+        return { ...r, reference: ref };
+      });
+
+      setAllResults(mappedResults || []);
+    }
   };
 
   return (
@@ -272,9 +234,9 @@ const Reports = () => {
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
             <Printer className="w-6 h-6 text-blue-400" />
-            Impressão de Laudos
+            Impressão de Laudos Estruturados
           </h1>
-          <p className="text-blue-300/50 text-sm mt-1 font-medium">Busque pacientes e gere PDFs oficiais</p>
+          <p className="text-blue-300/50 text-sm mt-1 font-medium">Geração de PDFs baseada em dados reais e referências oficiais</p>
         </div>
 
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">
@@ -326,10 +288,13 @@ const Reports = () => {
                   <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">Registro: #{service.id.slice(0, 8).toUpperCase()}</p>
                 </div>
               </div>
-              <PDFDownloadLink document={<LabReportPDF service={service} patient={selectedPatient} />} fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}.pdf`}>
+              <PDFDownloadLink 
+                document={<LabReportPDF service={service} patient={selectedPatient} results={allResults} />} 
+                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}.pdf`}
+              >
                 {({ loading: pdfLoading }) => (
                   <Button className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-blue-900/20" disabled={pdfLoading}>
-                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar PDF</>}
+                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar Laudo Oficial</>}
                   </Button>
                 )}
               </PDFDownloadLink>

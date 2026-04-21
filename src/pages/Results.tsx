@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { 
   FileCheck, 
@@ -9,14 +9,11 @@ import {
   Loader2, 
   ChevronRight, 
   Save, 
-  X, 
   FlaskConical,
-  Type,
-  RotateCcw
+  ClipboardCheck
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
@@ -28,10 +25,8 @@ const Results = () => {
   const [selectedService, setSelectedService] = useState<any>(null);
   const [selectedExam, setSelectedExam] = useState<any>(null);
   
-  const [template, setTemplate] = useState('');
-  const [parameters, setParameters] = useState<string[]>([]);
-  const [manualText, setManualText] = useState('');
-  const [isManualMode, setIsManualMode] = useState(false);
+  const [parameters, setParameters] = useState<any[]>([]);
+  const [values, setValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -44,11 +39,10 @@ const Results = () => {
       .from('services')
       .select(`
         *,
-        patients (full_name, cpf),
+        patients (full_name, cpf, gender),
         service_exams (
           id,
           status,
-          result_value,
           exam_id,
           exams (name)
         )
@@ -59,81 +53,72 @@ const Results = () => {
     setLoading(false);
   };
 
-  const getParamLabels = (text: string) => {
-    const parts = text.split('____');
-    return parts.slice(0, -1).map(part => {
-      const lines = part.trim().split('\n');
-      const lastLine = lines[lines.length - 1].trim();
-      const label = lastLine.split(/[:.]/).pop()?.trim() || lastLine.slice(-15).trim();
-      return label || "Valor";
-    });
-  };
-
   const handleSelectExam = async (se: any) => {
     setSelectedExam(se);
-    setIsManualMode(!!se.result_value);
     
-    const { data: preReport } = await supabase
-      .from('pre_reports')
-      .select('content')
+    // Buscar referências configuradas para este exame
+    const { data: refs } = await supabase
+      .from('reference_values')
+      .select('*')
       .eq('exam_id', se.exam_id)
-      .maybeSingle();
+      .order('created_at');
 
-    const baseTemplate = preReport?.content || '';
-    setTemplate(baseTemplate);
+    setParameters(refs || []);
 
-    if (se.result_value) {
-      setManualText(se.result_value);
-    } else {
-      setManualText(baseTemplate);
-      const count = (baseTemplate.match(/____/g) || []).length;
-      setParameters(new Array(count).fill(''));
-    }
+    // Buscar resultados já salvos, se existirem
+    const { data: existingResults } = await supabase
+      .from('service_exam_results')
+      .select('*')
+      .eq('service_exam_id', se.id);
+
+    const initialValues: Record<string, string> = {};
+    refs?.forEach(r => {
+      const saved = existingResults?.find(er => er.parameter_name === r.parameter);
+      initialValues[r.parameter] = saved?.value || '';
+    });
+    setValues(initialValues);
   };
 
-  const finalReport = useMemo(() => {
-    if (isManualMode) return manualText;
-    
-    let result = template;
-    parameters.forEach(param => {
-      result = result.replace('____', param || '____');
-    });
-    return result;
-  }, [template, parameters, manualText, isManualMode]);
-
-  const handleParamChange = (index: number, value: string) => {
-    const newParams = [...parameters];
-    newParams[index] = value;
-    setParameters(newParams);
+  const handleValueChange = (param: string, val: string) => {
+    setValues(prev => ({ ...prev, [param]: val }));
   };
 
   const handleSaveResult = async () => {
     if (!selectedExam) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase
+      // 1. Salvar resultados estruturados
+      const resultsToInsert = Object.entries(values).map(([param, val]) => ({
+        service_exam_id: selectedExam.id,
+        parameter_name: param,
+        value: val
+      }));
+
+      // Limpar antigos e inserir novos
+      await supabase.from('service_exam_results').delete().eq('service_exam_id', selectedExam.id);
+      const { error: resError } = await supabase.from('service_exam_results').insert(resultsToInsert);
+      
+      if (resError) throw resError;
+
+      // 2. Atualizar status do exame
+      const { error: examError } = await supabase
         .from('service_exams')
-        .update({ 
-          result_value: finalReport,
-          status: 'finalizado'
-        })
+        .update({ status: 'finalizado' })
         .eq('id', selectedExam.id);
 
-      if (error) throw error;
+      if (examError) throw examError;
 
-      showSuccess('Resultado salvo com sucesso!');
+      showSuccess('Resultados estruturados salvos!');
       
+      // Verificar se todos os exames do atendimento foram finalizados
       const updatedExams = selectedService.service_exams.map((se: any) => 
-        se.id === selectedExam.id ? { ...se, status: 'finalizado', result_value: finalReport } : se
+        se.id === selectedExam.id ? { ...se, status: 'finalizado' } : se
       );
       
-      const allFinished = updatedExams.every((se: any) => se.status === 'finalizado');
-      
-      if (allFinished) {
+      if (updatedExams.every((se: any) => se.status === 'finalizado')) {
         await supabase.from('services').update({ status: 'finalizado' }).eq('id', selectedService.id);
       }
 
-      setSelectedService({ ...selectedService, service_exams: updatedExams });
       setSelectedExam(null);
       fetchPendingServices();
     } catch (error: any) {
@@ -148,8 +133,6 @@ const Results = () => {
     s.patients?.cpf.includes(search)
   );
 
-  const paramLabels = useMemo(() => getParamLabels(template), [template]);
-
   return (
     <DashboardLayout>
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom duration-700">
@@ -157,9 +140,9 @@ const Results = () => {
           <div>
             <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
               <FileCheck className="w-6 h-6 text-blue-400" />
-              Lançamento de Resultados
+              Lançamento Estruturado
             </h1>
-            <p className="text-blue-300/50 text-sm mt-1 font-medium">Preencha os valores para gerar o laudo final</p>
+            <p className="text-blue-300/50 text-sm mt-1 font-medium">Insira os valores baseados nas referências do sistema</p>
           </div>
           {selectedService && (
             <Button variant="ghost" onClick={() => { setSelectedService(null); setSelectedExam(null); }} className="text-blue-400 hover:bg-blue-500/10 font-bold uppercase text-[10px]">
@@ -230,10 +213,11 @@ const Results = () => {
           </>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in zoom-in duration-500">
-            <div className="lg:col-span-3 space-y-4">
+            <div className="lg:col-span-4 space-y-4">
               <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6">
                 <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">Paciente</p>
                 <h3 className="text-lg font-bold text-white uppercase">{selectedService.patients?.full_name}</h3>
+                <p className="text-[10px] text-blue-300/60 font-bold uppercase mt-1">Sexo: {selectedService.patients?.gender}</p>
               </div>
               
               <div className="space-y-2">
@@ -252,96 +236,70 @@ const Results = () => {
                       <FlaskConical className={cn("w-4 h-4", selectedExam?.id === se.id ? "text-white" : "text-blue-500/50")} />
                       <span className="text-[10px] font-black uppercase tracking-tight">{se.exams?.name}</span>
                     </div>
-                    {se.status === 'finalizado' ? <FileCheck className="w-4 h-4 text-emerald-400" /> : <ChevronRight className="w-4 h-4" />}
+                    {se.status === 'finalizado' ? <ClipboardCheck className="w-4 h-4 text-emerald-400" /> : <ChevronRight className="w-4 h-4" />}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="lg:col-span-9 space-y-6">
+            <div className="lg:col-span-8">
               {selectedExam ? (
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                  <div className="xl:col-span-1 space-y-4">
-                    <div className="bg-blue-950/40 border border-white/10 rounded-[2rem] p-6">
-                      <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Valores do Exame</h3>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => setIsManualMode(!isManualMode)}
-                          className={cn("h-8 w-8 rounded-lg", isManualMode ? "text-amber-400 bg-amber-400/10" : "text-blue-400")}
-                          title={isManualMode ? "Voltar para preenchimento automático" : "Editar texto manualmente"}
-                        >
-                          {isManualMode ? <RotateCcw className="w-4 h-4" /> : <Type className="w-4 h-4" />}
-                        </Button>
-                      </div>
-
-                      {isManualMode ? (
-                        <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
-                          <p className="text-[9px] font-bold text-amber-400 uppercase leading-relaxed">
-                            Modo de edição manual ativado. Você pode alterar o texto diretamente no laudo ao lado.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                          {parameters.map((param, idx) => (
-                            <div key={idx} className="space-y-1.5">
-                              <label className="text-[9px] font-black text-blue-300/40 uppercase tracking-widest ml-1">
-                                {paramLabels[idx] || `Campo ${idx + 1}`}
-                              </label>
-                              <Input 
-                                value={param}
-                                onChange={(e) => handleParamChange(idx, e.target.value)}
-                                className="bg-blue-900/20 border-blue-500/10 h-10 rounded-xl text-white font-bold text-xs focus:ring-blue-500/50"
-                                placeholder="Digite o valor..."
-                              />
-                            </div>
-                          ))}
-                          {parameters.length === 0 && (
-                            <p className="text-[10px] text-blue-300/20 font-bold uppercase text-center py-8">
-                              Este modelo não possui campos automáticos.
-                            </p>
-                          )}
-                        </div>
-                      )}
+                <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                      <h3 className="text-xl font-black text-white uppercase tracking-tight">{selectedExam.exams?.name}</h3>
+                      <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Preenchimento de Parâmetros</p>
                     </div>
+                    <Button 
+                      onClick={handleSaveResult}
+                      disabled={submitting}
+                      className="bg-emerald-600 hover:bg-emerald-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-emerald-900/20"
+                    >
+                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Finalizar Exame</>}
+                    </Button>
                   </div>
 
-                  <div className="xl:col-span-2 space-y-4">
-                    <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col h-full">
-                      <div className="bg-blue-900/20 border-b border-white/5 p-6 flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-bold text-white uppercase tracking-tight">{selectedExam.exams?.name}</h3>
-                          <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Visualização do Laudo</p>
+                  <div className="space-y-6">
+                    {parameters.length > 0 ? (
+                      parameters.map((param) => (
+                        <div key={param.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-blue-900/10 rounded-2xl border border-white/5">
+                          <div className="md:col-span-1">
+                            <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-1">Parâmetro</label>
+                            <p className="text-sm font-bold text-white uppercase">{param.parameter}</p>
+                          </div>
+                          <div className="md:col-span-1">
+                            <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-1">Resultado ({param.unit})</label>
+                            <Input 
+                              value={values[param.parameter] || ''}
+                              onChange={(e) => handleValueChange(param.parameter, e.target.value)}
+                              className="bg-blue-900/20 border-blue-500/20 h-10 rounded-xl text-white font-bold text-xs"
+                              placeholder="Valor..."
+                            />
+                          </div>
+                          <div className="md:col-span-1">
+                            <label className="text-[10px] font-black text-blue-300/30 uppercase tracking-widest block mb-1">Referência</label>
+                            <p className="text-[10px] text-blue-300/50 font-medium italic">
+                              {selectedService.patients?.gender === 'masculino' ? param.male_ref : 
+                               selectedService.patients?.gender === 'feminino' ? param.female_ref : 
+                               param.general_ref} {param.unit}
+                            </p>
+                          </div>
                         </div>
-                        <Button 
-                          onClick={handleSaveResult}
-                          disabled={submitting}
-                          className="bg-emerald-600 hover:bg-emerald-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-emerald-900/20"
-                        >
-                          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Salvar Resultado</>}
-                        </Button>
+                      ))
+                    ) : (
+                      <div className="text-center py-12 border-2 border-dashed border-white/5 rounded-2xl">
+                        <p className="text-blue-300/20 font-bold uppercase text-xs tracking-widest">
+                          Nenhuma referência cadastrada para este exame.<br/>
+                          Configure em Configurações > Cadastro de Exames.
+                        </p>
                       </div>
-                      
-                      <div className="p-8 flex-grow">
-                        <Textarea 
-                          value={finalReport}
-                          onChange={(e) => isManualMode && setManualText(e.target.value)}
-                          readOnly={!isManualMode}
-                          className={cn(
-                            "w-full min-h-[500px] bg-black/20 border-white/5 rounded-2xl text-blue-50 font-mono text-sm p-8 resize-none leading-relaxed focus:ring-blue-500/30",
-                            !isManualMode && "cursor-default"
-                          )}
-                          placeholder="O laudo aparecerá aqui..."
-                        />
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               ) : (
-                <div className="h-[600px] flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-white/5 rounded-[2.5rem]">
+                <div className="h-[500px] flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-white/5 rounded-[2.5rem]">
                   <FlaskConical className="w-16 h-16 mb-4" />
-                  <p className="font-bold uppercase tracking-widest text-sm">Selecione um exame ao lado para lançar o resultado</p>
+                  <p className="font-bold uppercase tracking-widest text-sm">Selecione um exame ao lado para lançar os resultados</p>
                 </div>
               )}
             </div>
