@@ -106,21 +106,53 @@ const styles = StyleSheet.create({
 
 const formatFinalReport = (text: string) => {
   if (!text) return [];
-  const units = ['mg/dl', 'U/L', 'g/dL', 'mm/h', 'pg', 'fL', 'mcg/dL', 'ng/mL', 'mUI/L', 'mEq/L', 'mmol/L'];
+  const lines = text.split('\n');
+  const cleanedLines: string[] = [];
+  let skipMode = false;
 
-  return text.split('\n').map(line => {
-    let cleaned = line
-      .replace(/____/g, '') // Remove o marcador de campo vazio
-      .replace(/\(\s*[?&]\s*\)/g, '') 
-      .replace(/\s{2,}/g, ' ')
-      .trim();
+  const units = ['mg/dl', 'u/l', 'g/dl', 'mm/h', 'pg', 'fl', 'mcg/dl', 'ng/ml', 'mui/l', 'meq/l', 'mmol/l', '%', 'mil/mm', 'por/mm'];
+  const resultKeywords = ['reagente', 'positivo', 'negativo', 'ausência', 'presença', 'não reagente', 'normal', 'alterada'];
+
+  for (let line of lines) {
+    let rawLine = line.trim();
     
-    const hasUnit = units.some(u => cleaned.toLowerCase().includes(u.toLowerCase()));
-    const hasValue = /[0-9]/.test(cleaned) || /reagente|positivo|negativo|ausência|presença/i.test(cleaned);
+    // Se a linha for vazia, mantém apenas se não estivermos em skipMode
+    if (!rawLine) {
+      if (!skipMode) cleanedLines.push("");
+      continue;
+    }
+
+    // Detectar se é uma linha de resultado (tem : ou ____)
+    const isResultLine = rawLine.includes(':') || rawLine.includes('____');
     
-    if (hasUnit && !hasValue) cleaned = "";
-    return cleaned;
-  });
+    if (isResultLine) {
+      // Limpar o marcador
+      let processed = rawLine.replace(/____/g, '').trim();
+      
+      // Verificar se tem valor real (número ou palavra-chave)
+      const hasValue = /[0-9]/.test(processed) || resultKeywords.some(k => processed.toLowerCase().includes(k));
+      
+      // Se a linha termina com unidade mas não tem número, é considerada vazia
+      const hasUnitOnly = units.some(u => processed.toLowerCase().endsWith(u)) && !hasValue;
+
+      if (!hasValue || hasUnitOnly) {
+        skipMode = true; // Entra no modo de pular referências deste resultado
+        continue;
+      } else {
+        skipMode = false;
+        cleanedLines.push(processed.replace(/\s{2,}/g, ' '));
+      }
+    } else {
+      // É uma linha de referência ou cabeçalho
+      if (skipMode) continue; // Pula se o resultado anterior estava vazio
+      
+      // Se for uma linha de "Valor de Referência" ou similar, e não estamos pulando, mantém
+      cleanedLines.push(rawLine.replace(/\s{2,}/g, ' '));
+    }
+  }
+
+  // Remove linhas vazias duplicadas no final
+  return cleanedLines.filter((line, index) => !(line === "" && cleanedLines[index - 1] === ""));
 };
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
@@ -165,19 +197,27 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
         {sectorOrder.map(sector => {
           if (!groups[sector]) return null;
           
+          const sectorContent = groups[sector].map((se: any) => {
+            const lines = formatFinalReport(se.result_value || "");
+            if (lines.length === 0) return null;
+            return (
+              <View key={se.id} style={styles.examBlock} wrap={false}>
+                <Text style={styles.examName}>{se.exams?.name}</Text>
+                {lines.map((line: string, i: number) => {
+                  if (line === "") return <Text key={i} style={{ height: 11 }}> </Text>;
+                  const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:") || line.toLowerCase().includes("vr:") || line.toLowerCase().includes("normal") || line.toLowerCase().includes("desejável");
+                  return <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>{line}</Text>;
+                })}
+              </View>
+            );
+          }).filter(Boolean);
+
+          if (sectorContent.length === 0) return null;
+
           return (
             <View key={sector} wrap={false}>
               <Text style={styles.sectorTitle}>{sector}</Text>
-              {groups[sector].map((se: any) => (
-                <View key={se.id} style={styles.examBlock} wrap={false}>
-                  <Text style={styles.examName}>{se.exams?.name}</Text>
-                  {formatFinalReport(se.result_value || "").map((line: string, i: number) => {
-                    if (line === "") return <Text key={i} style={{ height: 11 }}> </Text>;
-                    const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:") || line.toLowerCase().includes("vr:");
-                    return <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>{line}</Text>;
-                  })}
-                </View>
-              ))}
+              {sectorContent}
             </View>
           );
         })}
