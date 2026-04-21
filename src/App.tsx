@@ -9,6 +9,8 @@ import Patients from "./pages/Patients";
 import NewService from "./pages/NewService";
 import Routine from "./pages/Routine";
 import Results from "./pages/Results";
+import Reports from "./pages/Reports";
+import SettingsPage from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,7 +28,8 @@ const App = () => (
           <Route path="/novo-atendimento" element={<NewService />} />
           <Route path="/rotina" element={<Routine />} />
           <Route path="/resultados" element={<Results />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/impressao" element={<Reports />} />
+          <Route path="/config" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
