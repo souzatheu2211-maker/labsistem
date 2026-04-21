@@ -8,7 +8,9 @@ import {
   User,
   MapPin,
   FileText,
-  Loader2
+  Loader2,
+  X,
+  Edit3
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,7 @@ const Patients = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [patients, setPatients] = useState<any[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -68,11 +71,41 @@ const Patients = () => {
     setFormData(prev => ({ ...prev, gender: value }));
   };
 
+  const resetForm = () => {
+    setFormData({
+      full_name: '',
+      cpf: '',
+      birth_date: '',
+      gender: 'masculino',
+      phone: '',
+      address: '',
+      observations: ''
+    });
+    setEditingId(null);
+    setStep(1);
+    setSearchQuery('');
+  };
+
+  const handleEdit = (patient: any) => {
+    setFormData({
+      full_name: patient.full_name || '',
+      cpf: patient.cpf || '',
+      birth_date: patient.birth_date || '',
+      gender: patient.gender || 'masculino',
+      phone: patient.phone || '',
+      address: patient.address || '',
+      observations: patient.observations || ''
+    });
+    setEditingId(patient.id);
+    setStep(1);
+    setSearchQuery('');
+    showSuccess(`Editando: ${patient.full_name}`);
+  };
+
   const handleSave = async () => {
-    // Validação de campos obrigatórios
     if (!formData.full_name || !formData.cpf || !formData.birth_date) {
       showError('Nome, CPF e Data de Nascimento são obrigatórios.');
-      setStep(1); // Volta para o primeiro passo onde estão esses campos
+      setStep(1);
       return;
     }
 
@@ -80,31 +113,28 @@ const Patients = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      const { error } = await supabase
-        .from('patients')
-        .insert([
-          { 
-            ...formData,
-            created_by: user?.id 
-          }
-        ]);
+      if (editingId) {
+        // Atualizar paciente existente
+        const { error } = await supabase
+          .from('patients')
+          .update({ ...formData })
+          .eq('id', editingId);
 
-      if (error) throw error;
+        if (error) throw error;
+        showSuccess('Dados do paciente atualizados!');
+      } else {
+        // Criar novo paciente
+        const { error } = await supabase
+          .from('patients')
+          .insert([{ ...formData, created_by: user?.id }]);
 
-      showSuccess('Paciente cadastrado com sucesso!');
-      setFormData({
-        full_name: '',
-        cpf: '',
-        birth_date: '',
-        gender: 'masculino',
-        phone: '',
-        address: '',
-        observations: ''
-      });
-      setStep(1);
-      setSearchQuery('');
+        if (error) throw error;
+        showSuccess('Paciente cadastrado com sucesso!');
+      }
+
+      resetForm();
     } catch (error: any) {
-      showError(error.message || 'Erro ao salvar paciente.');
+      showError(error.message || 'Erro ao processar solicitação.');
     } finally {
       setLoading(false);
     }
@@ -113,21 +143,34 @@ const Patients = () => {
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-700">
-        <div>
-          <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
-            <div className="p-2 bg-blue-600/20 rounded-xl">
-              <UserPlus className="w-6 h-6 text-blue-400" />
-            </div>
-            Cadastro de Pacientes
-          </h1>
-          <p className="text-blue-300/50 text-sm mt-1 font-medium">Gerencie e registre novos pacientes no sistema</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
+              <div className="p-2 bg-blue-600/20 rounded-xl">
+                {editingId ? <Edit3 className="w-6 h-6 text-amber-400" /> : <UserPlus className="w-6 h-6 text-blue-400" />}
+              </div>
+              {editingId ? 'Editar Paciente' : 'Cadastro de Pacientes'}
+            </h1>
+            <p className="text-blue-300/50 text-sm mt-1 font-medium">
+              {editingId ? `Atualizando dados de ${formData.full_name}` : 'Gerencie e registre novos pacientes no sistema'}
+            </p>
+          </div>
+          {editingId && (
+            <Button 
+              variant="outline" 
+              onClick={resetForm}
+              className="border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-xl font-bold uppercase text-[10px] gap-2"
+            >
+              <X className="w-4 h-4" /> Cancelar Edição
+            </Button>
+          )}
         </div>
 
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-6 backdrop-blur-sm">
           <div className="relative">
             <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
             <Input 
-              placeholder="Buscar paciente por nome ou CPF..." 
+              placeholder="Buscar paciente por nome ou CPF para editar..." 
               className="bg-blue-900/20 border-blue-500/10 h-12 pl-12 rounded-2xl text-white placeholder:text-blue-300/20 font-bold"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -137,12 +180,19 @@ const Patients = () => {
           {searchQuery && patients.length > 0 && (
             <div className="mt-4 space-y-2">
               {patients.map(p => (
-                <div key={p.id} className="flex items-center justify-between p-4 bg-blue-900/10 border border-white/5 rounded-xl">
+                <div key={p.id} className="flex items-center justify-between p-4 bg-blue-900/10 border border-white/5 rounded-xl group hover:border-blue-500/30 transition-all">
                   <div>
                     <p className="text-sm font-bold text-white uppercase">{p.full_name}</p>
                     <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">CPF: {p.cpf}</p>
                   </div>
-                  <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 font-bold uppercase text-[10px]">Ver Detalhes</Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => handleEdit(p)}
+                    className="text-blue-400 hover:text-blue-300 font-bold uppercase text-[10px] gap-2"
+                  >
+                    <Edit3 className="w-3 h-3" /> Editar Dados
+                  </Button>
                 </div>
               ))}
             </div>
@@ -278,9 +328,12 @@ const Patients = () => {
                 <Button 
                   onClick={handleSave} 
                   disabled={loading}
-                  className="bg-emerald-600 hover:bg-emerald-500 rounded-xl px-8 font-bold uppercase text-xs gap-2"
+                  className={cn(
+                    "rounded-xl px-8 font-bold uppercase text-xs gap-2",
+                    editingId ? "bg-amber-600 hover:bg-amber-500" : "bg-emerald-600 hover:bg-emerald-500"
+                  )}
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Finalizar Cadastro'}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingId ? 'Atualizar Cadastro' : 'Finalizar Cadastro')}
                 </Button>
               )}
             </div>
