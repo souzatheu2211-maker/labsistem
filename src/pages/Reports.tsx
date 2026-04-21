@@ -12,7 +12,7 @@ import {
   Download,
   Printer
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/input";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showSuccess, showError } from "@/utils/toast";
@@ -94,14 +94,16 @@ const styles = StyleSheet.create({
   resultText: {
     fontSize: 11,
     fontFamily: 'Times-Roman',
-    lineHeight: 1.3,
+    lineHeight: 1.2,
     color: '#000000',
+    whiteSpace: 'pre-wrap', // Tenta preservar espaços se o renderer suportar
   },
   referenceText: {
     fontSize: 9,
     fontFamily: 'Times-Roman',
     color: '#333333',
     marginTop: 1,
+    lineHeight: 1.2,
   }
 });
 
@@ -127,15 +129,13 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
 
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
 
-  // Função de limpeza profunda de lixo visual (bloqueia placeholders e caracteres de marcação)
+  // Limpeza absoluta de marcadores sem colapsar espaços ou quebras de linha
   const cleanVisualTrash = (text: string) => {
     if (!text) return "";
     return text
-      .replace(/\([\s?&]*\)/g, '') // Remove (?), (&), ( ? ), ( &&& ), etc.
-      .replace(/[?&]{2,}/g, '')    // Remove sequências como ???? ou &&&&
-      .replace(/\(\s*\)/g, '')     // Remove parênteses vazios
-      .replace(/\s{2,}/g, ' ')     // Remove espaços duplos
-      .trim();
+      .replace(/\(\s*[?&]\s*\)/g, '') // Remove (?), (&), ( ? ), etc.
+      .replace(/[?&]{2,}/g, '')       // Remove sequências como ???? ou &&&&
+      .replace(/\(\s*\)/g, '');       // Remove parênteses vazios residuais
   };
 
   return (
@@ -166,12 +166,16 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                   <Text style={styles.examName}>{se.exams?.name}</Text>
                   {cleanVisualTrash(se.result_value || "")
                     .split('\n').map((line: string, i: number) => {
+                    // Se a linha for vazia, renderiza um espaço para manter a quebra de linha original
+                    if (line.trim() === "") return <Text key={i} style={{ height: 11 }}> </Text>;
+
                     const isRef = line.toLowerCase().includes("referência") || 
                                   line.toLowerCase().includes("ref:") || 
                                   line.toLowerCase().includes("valor:") || 
                                   line.toLowerCase().includes("vr:") ||
                                   line.toLowerCase().includes("normal:") ||
                                   line.toLowerCase().includes("desejável:");
+                    
                     return (
                       <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
                         {line}
