@@ -37,13 +37,13 @@ const formatSafeDate = (dateStr: string) => {
   return format(parseISO(dateStr), "dd/MM/yyyy");
 };
 
-// Configuração de Estilos para o PDF (A4)
+// Configuração de Estilos para o PDF (A4) usando Times-Roman
 const styles = StyleSheet.create({
   page: {
     paddingTop: 170,    
     paddingBottom: 80,  
     paddingHorizontal: 50,
-    fontFamily: 'Helvetica',
+    fontFamily: 'Times-Roman',
     backgroundColor: '#ffffff',
   },
   background: {
@@ -66,39 +66,40 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   label: {
-    fontSize: 13, 
-    fontWeight: 'bold',
+    fontSize: 12, 
+    fontFamily: 'Times-Bold',
   },
   value: {
-    fontSize: 13, 
+    fontSize: 12, 
+    fontFamily: 'Times-Roman',
   },
   sectorTitle: {
-    fontSize: 12,
+    fontSize: 11,
+    fontFamily: 'Times-Bold',
     textAlign: 'center',
     textDecoration: 'underline',
     marginTop: 15,
     marginBottom: 10,
     textTransform: 'uppercase',
-    fontWeight: 'bold',
   },
   examBlock: {
-    marginBottom: 20, 
+    marginBottom: 15, 
   },
   examName: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 11,
+    fontFamily: 'Times-Bold',
     marginBottom: 4,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 12, // Fonte 12 conforme solicitado
-    fontFamily: 'Courier', 
-    lineHeight: 1.2,
+    fontSize: 11,
+    fontFamily: 'Times-Roman',
+    lineHeight: 1.3,
     color: '#000000',
   },
   referenceText: {
-    fontSize: 9, // Fonte menor para referências
-    fontFamily: 'Courier',
+    fontSize: 9,
+    fontFamily: 'Times-Roman',
     color: '#333333',
     marginTop: 1,
   }
@@ -126,13 +127,15 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
 
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
 
-  // Função de limpeza profunda de lixo visual
+  // Função de limpeza profunda de lixo visual (bloqueia placeholders e caracteres de marcação)
   const cleanVisualTrash = (text: string) => {
     if (!text) return "";
     return text
       .replace(/\([\s?&]*\)/g, '') // Remove (?), (&), ( ? ), ( &&& ), etc.
       .replace(/[?&]{2,}/g, '')    // Remove sequências como ???? ou &&&&
-      .replace(/\(\s*\)/g, '');    // Remove parênteses vazios que sobraram
+      .replace(/\(\s*\)/g, '')     // Remove parênteses vazios
+      .replace(/\s{2,}/g, ' ')     // Remove espaços duplos
+      .trim();
   };
 
   return (
