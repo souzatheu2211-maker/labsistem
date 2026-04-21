@@ -40,10 +40,10 @@ const formatSafeDate = (dateStr: string) => {
 // Configuração de Estilos para o PDF (A4)
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 170,    // Espaço para o cabeçalho e info do paciente
-    paddingBottom: 80,  // Espaço para o rodapé do timbre
+    paddingTop: 170,    
+    paddingBottom: 80,  
     paddingHorizontal: 50,
-    fontFamily: 'Times-Roman',
+    fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
   },
   background: {
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: 'absolute',
-    top: 115, // Respeitando a margem do timbre
+    top: 115, 
     left: 50,
     right: 50,
     borderBottomWidth: 1,
@@ -68,11 +68,11 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   label: {
-    fontSize: 13, // Aumentado conforme solicitado
+    fontSize: 13, 
     fontWeight: 'bold',
   },
   value: {
-    fontSize: 13, // Aumentado conforme solicitado
+    fontSize: 13, 
   },
   sectorTitle: {
     fontSize: 12,
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   examBlock: {
-    marginBottom: 25, // Espaçamento generoso entre exames
+    marginBottom: 25, 
   },
   examName: {
     fontSize: 12,
@@ -93,15 +93,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 12, // Fonte 12 para o laudo principal
-    lineHeight: 1.4,
+    fontSize: 11, // Ajustado para 11 em Courier para não estourar a margem, mas manter o alinhamento
+    fontFamily: 'Courier', // Fonte monoespaçada preserva os espaços e pontos de alinhamento
+    lineHeight: 1.2,
     color: '#000000',
   },
   referenceText: {
-    fontSize: 9, // Fonte menor para valores de referência
+    fontSize: 9, 
+    fontFamily: 'Courier',
     color: '#333333',
-    marginTop: 3,
-    fontStyle: 'italic',
+    marginTop: 2,
   }
 });
 
@@ -154,8 +155,8 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
                   {se.result_value
-                    ?.replace(/\(\?\)/g, '') 
-                    ?.replace(/\(&\)/g, '')  
+                    ?.replace(/\(\?+\)/g, '') // Remove (?) ou (???)
+                    ?.replace(/\(&+\)/g, '')  // Remove (&) ou (&&&&)
                     ?.split('\n').map((line: string, i: number) => {
                     const isRef = line.toLowerCase().includes("referência") || 
                                   line.toLowerCase().includes("ref:") || 
@@ -165,7 +166,7 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                                   line.toLowerCase().includes("desejável:");
                     return (
                       <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
-                        {line.trim()}
+                        {line}
                       </Text>
                     );
                   })}
