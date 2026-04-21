@@ -24,37 +24,26 @@ import {
   View, 
   StyleSheet, 
   PDFDownloadLink, 
-  Image,
-  Font
+  Image
 } from "@react-pdf/renderer";
 
-// Registro de fontes para garantir consistência
-Font.register({
-  family: 'Helvetica-Bold',
-  src: 'https://fonts.gstatic.com/s/helveticaneue/v70/1Ptsg8zYS_SKmS3Ic9z_33_Z.ttf' // Placeholder para Bold
-});
-
-// Função para formatar data com segurança
+// Função para formatar data sem erro de fuso horário (UTC para Local)
 const formatSafeDate = (dateStr: string) => {
   if (!dateStr) return "";
-  try {
-    if (dateStr.length === 10) {
-      const [year, month, day] = dateStr.split('-').map(Number);
-      return format(new Date(year, month - 1, day), "dd/MM/yyyy");
-    }
-    return format(parseISO(dateStr), "dd/MM/yyyy");
-  } catch (e) {
-    return dateStr;
+  if (dateStr.length === 10) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return format(new Date(year, month - 1, day), "dd/MM/yyyy");
   }
+  return format(parseISO(dateStr), "dd/MM/yyyy");
 };
 
-// Estilos Profissionais (Padrão Laboratorial)
+// Configuração de Estilos para o PDF (A4)
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 185,    // Margem superior para o timbre e cabeçalho fixo
-    paddingBottom: 90,  // Margem inferior para o rodapé do timbre
+    paddingTop: 170,    // Espaço para o cabeçalho e info do paciente
+    paddingBottom: 80,  // Espaço para o rodapé do timbre
     paddingHorizontal: 50,
-    fontFamily: 'Helvetica',
+    fontFamily: 'Times-Roman',
     backgroundColor: '#ffffff',
   },
   background: {
@@ -64,77 +53,59 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  // Cabeçalho Fixo do Paciente
-  headerContainer: {
+  patientInfoFixed: {
     position: 'absolute',
-    top: 115,
+    top: 115, // Respeitando a margem do timbre
     left: 50,
     right: 50,
-    borderBottom: '1pt solid #000',
+    borderBottomWidth: 1,
+    borderBottomColor: '#000',
     paddingBottom: 10,
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  infoBlock: {
-    flexDirection: 'column',
+    marginBottom: 5,
   },
   label: {
-    fontSize: 8,
-    color: '#666',
-    textTransform: 'uppercase',
-    marginBottom: 1,
+    fontSize: 13, // Aumentado conforme solicitado
+    fontWeight: 'bold',
   },
   value: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#000',
+    fontSize: 13, // Aumentado conforme solicitado
   },
-  // Seções e Exames
   sectorTitle: {
-    fontSize: 14,
+    fontSize: 12,
     textAlign: 'center',
-    marginTop: 25,
-    marginBottom: 15,
+    textDecoration: 'underline',
+    marginTop: 15,
+    marginBottom: 12,
     textTransform: 'uppercase',
     fontWeight: 'bold',
-    color: '#000',
-    textDecoration: 'underline',
   },
-  examContainer: {
-    marginBottom: 30,
-  },
-  examHeader: {
-    marginBottom: 8,
-    borderLeft: '3pt solid #000',
-    paddingLeft: 8,
+  examBlock: {
+    marginBottom: 25, // Espaçamento generoso entre exames
   },
   examName: {
     fontSize: 12,
     fontWeight: 'bold',
+    marginBottom: 6,
     textTransform: 'uppercase',
   },
-  // Conteúdo do Laudo
-  lineWrapper: {
-    minHeight: 12, // Garante que linhas vazias ocupem espaço (preserva parágrafos)
-  },
-  resultLine: {
-    fontSize: 12,
+  resultText: {
+    fontSize: 12, // Fonte 12 para o laudo principal
     lineHeight: 1.4,
-    color: '#000',
+    color: '#000000',
   },
-  referenceLine: {
-    fontSize: 8.5,
-    color: '#444',
+  referenceText: {
+    fontSize: 9, // Fonte menor para valores de referência
+    color: '#333333',
+    marginTop: 3,
     fontStyle: 'italic',
-    marginTop: 2,
   }
 });
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
-  // Ordem lógica de setores
   const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA"];
   
   const getSector = (examName: string) => {
@@ -144,7 +115,7 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
     if (name.includes("URINA") || name.includes("EAS")) return "URINÁLISE";
     if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
     if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
-    return "BIOQUÍMICA";
+    return "HEMATOLOGIA";
   };
 
   const groups: { [key: string]: any[] } = {};
@@ -159,38 +130,20 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
-        {/* Timbre de Fundo Fixo */}
         <Image src={timbreUrl} style={styles.background} fixed />
 
-        {/* Cabeçalho Fixo em todas as páginas */}
-        <View style={styles.headerContainer} fixed>
+        <View style={styles.patientInfoFixed} fixed>
           <View style={styles.patientRow}>
-            <View style={styles.infoBlock}>
-              <Text style={styles.label}>Paciente</Text>
-              <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text>
-            </View>
-            <View style={styles.infoBlock}>
-              <Text style={styles.label}>Registro</Text>
-              <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text>
-            </View>
+            <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
+            <Text style={styles.label}>REGISTRO: <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
           </View>
           <View style={styles.patientRow}>
-            <View style={styles.infoBlock}>
-              <Text style={styles.label}>CPF</Text>
-              <Text style={styles.value}>{patient.cpf}</Text>
-            </View>
-            <View style={styles.infoBlock}>
-              <Text style={styles.label}>Data de Nasc.</Text>
-              <Text style={styles.value}>{formatSafeDate(patient.birth_date)}</Text>
-            </View>
-            <View style={styles.infoBlock}>
-              <Text style={styles.label}>Data do Exame</Text>
-              <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text>
-            </View>
+            <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
+            <Text style={styles.label}>DN: <Text style={styles.value}>{formatSafeDate(patient.birth_date)}</Text></Text>
+            <Text style={styles.label}>DATA: <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text></Text>
           </View>
         </View>
 
-        {/* Conteúdo dos Exames */}
         {sectorOrder.map(sector => {
           if (!groups[sector]) return null;
           
@@ -198,11 +151,8 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
             <View key={sector} wrap={false}>
               <Text style={styles.sectorTitle}>{sector}</Text>
               {groups[sector].map((se: any) => (
-                <View key={se.id} style={styles.examContainer} wrap={false}>
-                  <View style={styles.examHeader}>
-                    <Text style={styles.examName}>{se.exams?.name}</Text>
-                  </View>
-                  
+                <View key={se.id} style={styles.examBlock} wrap={false}>
+                  <Text style={styles.examName}>{se.exams?.name}</Text>
                   {se.result_value
                     ?.replace(/\(\?\)/g, '') 
                     ?.replace(/\(&\)/g, '')  
@@ -213,13 +163,10 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                                   line.toLowerCase().includes("vr:") ||
                                   line.toLowerCase().includes("normal:") ||
                                   line.toLowerCase().includes("desejável:");
-                    
                     return (
-                      <View key={i} style={styles.lineWrapper}>
-                        <Text style={isRef ? styles.referenceLine : styles.resultLine}>
-                          {line || " "}
-                        </Text>
-                      </View>
+                      <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
+                        {line.trim()}
+                      </Text>
                     );
                   })}
                 </View>
