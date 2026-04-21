@@ -28,27 +28,26 @@ import {
 
 // Dimensões A4 em pontos (pt): 595.28 x 841.89
 // 1mm = 2.834pt
-// 40mm = ~113pt
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 185, // Espaço reservado para o cabeçalho fixo (Timbre + Info Paciente)
-    paddingBottom: 90,
-    paddingHorizontal: 45,
+    paddingTop: 190, // Espaço para o cabeçalho fixo
+    paddingBottom: 100,
+    paddingHorizontal: 50,
     fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
-    color: '#1a1a1a',
+    color: '#000000',
   },
   fixedHeader: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 175, // Altura total do cabeçalho fixo
-    paddingHorizontal: 45,
+    height: 180,
+    paddingHorizontal: 50,
   },
   timbreContainer: {
     width: '100%',
-    height: 115, // ~40mm de altura fixa para o timbre
+    height: 120, // Altura fixa para o timbre (~42mm)
     marginTop: 10,
     display: 'flex',
     alignItems: 'center',
@@ -57,14 +56,14 @@ const styles = StyleSheet.create({
   timbre: {
     width: '100%',
     height: '100%',
-    objectFit: 'contain', // GARANTE PROPORÇÃO ORIGINAL SEM DISTORÇÃO
+    objectFit: 'contain', // PRESERVA PROPORÇÃO ORIGINAL SEM ESTICAR
   },
   patientInfoContainer: {
     width: '100%',
-    borderTopWidth: 1.5,
-    borderTopColor: '#2563eb',
+    borderTopWidth: 1,
+    borderTopColor: '#000000',
     borderBottomWidth: 0.5,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: '#cccccc',
     paddingVertical: 8,
     marginTop: 5,
   },
@@ -75,87 +74,79 @@ const styles = StyleSheet.create({
   },
   patientLabel: {
     fontSize: 9,
-    color: '#6b7280',
     fontWeight: 'bold',
     textTransform: 'uppercase',
   },
   patientValue: {
     fontSize: 10,
-    color: '#111827',
-    fontWeight: 'bold',
+    fontWeight: 'normal',
   },
   patientSubRow: {
     flexDirection: 'row',
-    gap: 25,
+    gap: 30,
   },
   content: {
-    marginTop: 5,
+    marginTop: 10,
   },
   sectorTitle: {
     fontSize: 10,
     fontWeight: 'bold',
     textAlign: 'center',
-    backgroundColor: '#f3f4f6',
-    paddingVertical: 4,
-    marginTop: 12,
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 3,
+    marginTop: 15,
     marginBottom: 10,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: '#374151',
-    borderRadius: 2,
   },
   examBlock: {
-    marginBottom: 12,
-    paddingLeft: 5,
+    marginBottom: 15,
   },
   examName: {
     fontSize: 10,
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 5,
     textTransform: 'uppercase',
-    color: '#1e40af',
+    textDecoration: 'underline',
   },
   resultText: {
     fontSize: 10,
     lineHeight: 1.4,
-    color: '#1f2937',
   },
   referenceText: {
     fontSize: 8,
-    color: '#6b7280',
-    marginTop: 1,
+    color: '#666666',
+    marginTop: 2,
     fontStyle: 'italic',
   },
   signatureArea: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 110,
     left: 0,
     right: 0,
     alignItems: 'center',
   },
   signatureLine: {
-    width: 180,
+    width: 200,
     borderTopWidth: 0.5,
-    borderTopColor: '#374151',
-    marginTop: 30,
+    borderTopColor: '#000000',
     marginBottom: 4,
   },
   signatureText: {
-    fontSize: 8,
+    fontSize: 9,
     textAlign: 'center',
-    color: '#374151',
     fontWeight: 'bold',
   },
   footer: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 40,
     left: 0,
     right: 0,
     textAlign: 'center',
     fontSize: 7,
-    color: '#9ca3af',
+    color: '#999999',
     borderTopWidth: 0.5,
-    borderTopColor: '#f3f4f6',
+    borderTopColor: '#eeeeee',
     paddingTop: 10,
   }
 });
@@ -163,13 +154,6 @@ const styles = StyleSheet.create({
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA", "OUTROS"];
   
-  const bioOrder = [
-    "GLICOSE", "GLICEMIA", "HEMOGLOBINA GLICADA", "HBA1C",
-    "COLESTEROL TOTAL", "COLESTEROL HDL", "COLESTEROL LDL", "COLESTEROL VLDL", "TRIGLICERÍDEOS",
-    "UREIA", "CREATININA",
-    "TGO", "TGP", "GAMA GT", "FOSFATASE ALCALINA", "BILIRRUBINAS"
-  ];
-
   const getSector = (examName: string) => {
     const name = examName.toUpperCase();
     if (name.includes("HEMOGRAMA") || name.includes("SANGUE")) return "HEMATOLOGIA";
@@ -178,19 +162,6 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
     if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
     if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
     return "OUTROS";
-  };
-
-  const sortExams = (exams: any[]) => {
-    return [...exams].sort((a, b) => {
-      const nameA = a.exams?.name.toUpperCase() || "";
-      const nameB = b.exams?.name.toUpperCase() || "";
-      const idxA = bioOrder.findIndex(item => nameA.includes(item));
-      const idxB = bioOrder.findIndex(item => nameB.includes(item));
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return nameA.localeCompare(nameB);
-    });
   };
 
   const groups: { [key: string]: any[] } = {};
@@ -223,19 +194,19 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
           </View>
         </View>
 
-        {/* Conteúdo Dinâmico */}
+        {/* Conteúdo dos Exames */}
         <View style={styles.content}>
           {sectorOrder.map(sector => {
             if (!groups[sector]) return null;
-            const sortedExams = sortExams(groups[sector]);
             
             return (
               <View key={sector} wrap={false}>
                 <Text style={styles.sectorTitle}>{sector}</Text>
-                {sortedExams.map((se: any) => (
+                {groups[sector].map((se: any) => (
                   <View key={se.id} style={styles.examBlock}>
                     <Text style={styles.examName}>{se.exams?.name}</Text>
-                    {se.result_value?.split('\n').map((line: string, i: number) => {
+                    {/* Limpeza de placeholders (?) residuais */}
+                    {se.result_value?.replace(/\(\?\)/g, '').split('\n').map((line: string, i: number) => {
                       const isRef = line.toLowerCase().includes("referência") || 
                                     line.toLowerCase().includes("ref:") || 
                                     line.toLowerCase().includes("valor:") || 
@@ -253,14 +224,14 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
           })}
         </View>
 
-        {/* Assinatura Fixa na Última Página (ou em todas se preferir, aqui está fixa) */}
+        {/* Assinatura Fixa */}
         <View style={styles.signatureArea} fixed>
           <View style={styles.signatureLine} />
           <Text style={styles.signatureText}>Matheus Souza</Text>
           <Text style={[styles.signatureText, { fontWeight: 'normal', fontSize: 7 }]}>Técnico em Patologia Clínica • CRF-BA 805.994</Text>
         </View>
 
-        {/* Rodapé Fixo */}
+        {/* Rodapé */}
         <Text 
           style={styles.footer} 
           render={({ pageNumber, totalPages }) => (
