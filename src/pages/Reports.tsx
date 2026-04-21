@@ -23,81 +23,125 @@ import {
   View, 
   StyleSheet, 
   PDFDownloadLink, 
-  Image
+  Image,
+  Font
 } from "@react-pdf/renderer";
 
+// Estilos refinados para um laudo profissional
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 170, // Aumentado levemente para dar respiro após o cabeçalho
-    paddingBottom: 60,
-    paddingHorizontal: 50,
-    fontFamily: 'Times-Roman',
+    paddingTop: 180, 
+    paddingBottom: 80,
+    paddingHorizontal: 45,
+    fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
+    color: '#1a1a1a',
   },
   fixedHeader: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+    height: 130,
   },
   timbre: {
     width: '100%',
-    // Removido height auto para evitar conflitos em containers absolutos
-    // O react-pdf mantém a proporção se apenas a largura for definida
+    height: '100%',
+    objectFit: 'contain', // Garante que a imagem não estique
   },
   patientInfoContainer: {
     position: 'absolute',
-    top: 125, // Posicionado precisamente abaixo da arte do timbre
-    left: 50,
-    right: 50,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eeeeee',
-    paddingBottom: 8,
+    top: 125,
+    left: 45,
+    right: 45,
+    borderTopWidth: 1.5,
+    borderTopColor: '#2563eb', // Azul do sistema
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e5e7eb',
+    paddingVertical: 10,
     marginBottom: 20,
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   patientLabel: {
-    fontSize: 10,
+    fontSize: 9,
+    color: '#6b7280',
     fontWeight: 'bold',
+    textTransform: 'uppercase',
   },
   patientValue: {
     fontSize: 10,
+    color: '#111827',
+    fontWeight: 'bold',
   },
   patientSubRow: {
     flexDirection: 'row',
-    gap: 30,
+    gap: 25,
+  },
+  content: {
+    marginTop: 10,
   },
   sectorTitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
     textAlign: 'center',
-    textDecoration: 'underline',
+    backgroundColor: '#f3f4f6',
+    paddingVertical: 4,
     marginTop: 15,
-    marginBottom: 10,
+    marginBottom: 12,
     textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: '#374151',
+    borderRadius: 2,
   },
   examBlock: {
-    marginBottom: 12,
+    marginBottom: 15,
+    paddingLeft: 5,
   },
   examName: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 5,
     textTransform: 'uppercase',
+    color: '#1e40af', // Azul escuro para destaque
+  },
+  resultLine: {
+    flexDirection: 'row',
+    marginBottom: 2,
   },
   resultText: {
-    fontSize: 11,
-    lineHeight: 1.3,
+    fontSize: 10,
+    lineHeight: 1.4,
+    color: '#1f2937',
   },
   referenceText: {
     fontSize: 8,
-    color: '#555555',
-    marginTop: 2,
+    color: '#6b7280',
+    marginTop: 1,
     fontStyle: 'italic',
+  },
+  signatureArea: {
+    position: 'absolute',
+    bottom: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  signatureLine: {
+    width: 200,
+    borderTopWidth: 0.5,
+    borderTopColor: '#374151',
+    marginTop: 40,
+    marginBottom: 4,
+  },
+  signatureText: {
+    fontSize: 8,
+    textAlign: 'center',
+    color: '#374151',
+    fontWeight: 'bold',
   },
   footer: {
     position: 'absolute',
@@ -105,8 +149,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     textAlign: 'center',
-    fontSize: 8,
-    color: '#999999',
+    fontSize: 7,
+    color: '#9ca3af',
+    borderTopWidth: 0.5,
+    borderTopColor: '#f3f4f6',
+    paddingTop: 10,
   }
 });
 
@@ -153,55 +200,67 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
 
   return (
-    <Document>
+    <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
+        {/* Cabeçalho Fixo com Timbre Preservado */}
         <View fixed style={styles.fixedHeader}>
           <Image src={timbreUrl} style={styles.timbre} />
           <View style={styles.patientInfoContainer}>
             <View style={styles.patientRow}>
-              <Text style={styles.patientLabel}>NOME: <Text style={styles.patientValue}>{patient.full_name.toUpperCase()}</Text></Text>
-              <Text style={styles.patientLabel}>REGISTRO: <Text style={styles.patientValue}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
+              <Text style={styles.patientLabel}>Paciente: <Text style={styles.patientValue}>{patient.full_name.toUpperCase()}</Text></Text>
+              <Text style={styles.patientLabel}>Registro: <Text style={styles.patientValue}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
             </View>
             <View style={styles.patientSubRow}>
               <Text style={styles.patientLabel}>CPF: <Text style={styles.patientValue}>{patient.cpf}</Text></Text>
-              <Text style={styles.patientLabel}>IDADE: <Text style={styles.patientValue}>{differenceInYears(new Date(), new Date(patient.birth_date))} ANOS</Text></Text>
-              <Text style={styles.patientLabel}>DN: <Text style={styles.patientValue}>{format(new Date(patient.birth_date), "dd/MM/yyyy")}</Text></Text>
+              <Text style={styles.patientLabel}>Idade: <Text style={styles.patientValue}>{differenceInYears(new Date(), new Date(patient.birth_date))} Anos</Text></Text>
+              <Text style={styles.patientLabel}>Data: <Text style={styles.patientValue}>{format(new Date(service.created_at), "dd/MM/yyyy")}</Text></Text>
             </View>
           </View>
         </View>
 
-        {sectorOrder.map(sector => {
-          if (!groups[sector]) return null;
-          const sortedExams = sortExams(groups[sector]);
-          
-          return (
-            <View key={sector}>
-              {sector !== "OUTROS" && (
+        {/* Conteúdo dos Exames */}
+        <View style={styles.content}>
+          {sectorOrder.map(sector => {
+            if (!groups[sector]) return null;
+            const sortedExams = sortExams(groups[sector]);
+            
+            return (
+              <View key={sector} wrap={false}>
                 <Text style={styles.sectorTitle}>{sector}</Text>
-              )}
-              {sortedExams.map((se: any) => (
-                <View key={se.id} style={styles.examBlock} wrap={false}>
-                  <Text style={styles.examName}>{se.exams?.name}</Text>
-                  {se.result_value?.split('\n').map((line: string, i: number) => {
-                    const isRef = line.toLowerCase().includes("referência") || 
-                                  line.toLowerCase().includes("ref:") || 
-                                  line.toLowerCase().includes("valor:") || 
-                                  line.toLowerCase().includes("vr:");
-                    return (
-                      <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
-                        {line}
-                      </Text>
-                    );
-                  })}
-                </View>
-              ))}
-            </View>
-          );
-        })}
+                {sortedExams.map((se: any) => (
+                  <View key={se.id} style={styles.examBlock}>
+                    <Text style={styles.examName}>{se.exams?.name}</Text>
+                    {se.result_value?.split('\n').map((line: string, i: number) => {
+                      const isRef = line.toLowerCase().includes("referência") || 
+                                    line.toLowerCase().includes("ref:") || 
+                                    line.toLowerCase().includes("valor:") || 
+                                    line.toLowerCase().includes("vr:");
+                      return (
+                        <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
+                          {line}
+                        </Text>
+                      );
+                    })}
+                  </View>
+                ))}
+              </View>
+            );
+          })}
+        </View>
 
+        {/* Área de Assinatura */}
+        <View style={styles.signatureArea} fixed>
+          <View style={styles.signatureLine} />
+          <Text style={styles.signatureText}>Matheus Souza</Text>
+          <Text style={[styles.signatureText, { fontWeight: 'normal', fontSize: 7 }]}>Técnico em Patologia Clínica • CRF-BA 805.994</Text>
+        </View>
+
+        {/* Rodapé */}
         <Text 
           style={styles.footer} 
-          render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} 
+          render={({ pageNumber, totalPages }) => (
+            `Lab Acajutiba - Inovação & Precisão | Página ${pageNumber} de ${totalPages}`
+          )} 
           fixed 
         />
       </Page>
