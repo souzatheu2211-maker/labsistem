@@ -27,97 +27,66 @@ import {
   Image
 } from "@react-pdf/renderer";
 
-// Configuração de Estilos para o PDF (A4: 210mm x 297mm)
+// Configuração de Estilos para o PDF (A4)
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 180, // Aumentado para acomodar o timbre maior
-    paddingBottom: 60,
+    paddingTop: 160,    // Espaço para o cabeçalho do timbre
+    paddingBottom: 80,  // Espaço para o rodapé do timbre
     paddingHorizontal: 50,
-    fontFamily: 'Helvetica',
+    fontFamily: 'Times-Roman', // Times New Roman padrão do PDF
     backgroundColor: '#ffffff',
   },
-  fixedHeader: {
+  background: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 170,
+    bottom: 0,
   },
-  timbreContainer: {
-    width: '100%',
-    height: 130, // Altura definida para o timbre
-    marginBottom: 5,
-  },
-  timbre: {
-    width: '100%',
-    height: '100%',
-  },
-  patientHeader: {
-    width: '100%',
-    paddingVertical: 8,
-    paddingHorizontal: 50, // Mantém o texto alinhado com o conteúdo da página
-    marginTop: 2,
+  patientInfo: {
+    marginBottom: 20,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#000',
+    paddingBottom: 10,
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   label: {
     fontSize: 10,
     fontWeight: 'bold',
-    textTransform: 'uppercase',
   },
   value: {
     fontSize: 10,
-    fontWeight: 'normal',
-  },
-  content: {
-    marginTop: 5,
   },
   sectorTitle: {
     fontSize: 12,
-    fontWeight: 'bold',
     textAlign: 'center',
-    backgroundColor: '#f5f5f5',
-    paddingVertical: 4,
+    textDecoration: 'underline',
     marginTop: 15,
     marginBottom: 10,
     textTransform: 'uppercase',
-    letterSpacing: 1,
   },
   examBlock: {
     marginBottom: 15,
   },
   examName: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     marginBottom: 5,
     textTransform: 'uppercase',
-    textDecoration: 'underline',
   },
   resultText: {
-    fontSize: 11,
-    lineHeight: 1.4,
+    fontSize: 12,
+    lineHeight: 1.3,
     color: '#000000',
   },
   referenceText: {
-    fontSize: 8.5,
-    color: '#444444',
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontSize: 7,
-    color: '#999999',
-    borderTopWidth: 0.5,
-    borderTopColor: '#eeeeee',
-    paddingTop: 8,
+    fontSize: 8,
+    color: '#333333',
+    marginTop: 1,
   }
 });
 
@@ -146,61 +115,48 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
-        {/* Cabeçalho Fixo em Todas as Páginas */}
-        <View fixed style={styles.fixedHeader}>
-          <View style={styles.timbreContainer}>
-            <Image src={timbreUrl} style={styles.timbre} />
+        {/* Timbre como fundo fixo */}
+        <Image src={timbreUrl} style={styles.background} fixed />
+
+        {/* Informações do Paciente sobrepostas ao timbre */}
+        <View style={styles.patientInfo}>
+          <View style={styles.patientRow}>
+            <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
+            <Text style={styles.label}>REGISTRO: <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
           </View>
-          <View style={styles.patientHeader}>
-            <View style={styles.patientRow}>
-              <Text style={styles.label}>Paciente: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
-              <Text style={styles.label}>Registro: <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
-            </View>
-            <View style={styles.patientRow}>
-              <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
-              <Text style={styles.label}>DN: <Text style={styles.value}>{format(new Date(patient.birth_date), "dd/MM/yyyy")}</Text></Text>
-              <Text style={styles.label}>Data: <Text style={styles.value}>{format(new Date(service.created_at), "dd/MM/yyyy")}</Text></Text>
-            </View>
+          <View style={styles.patientRow}>
+            <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
+            <Text style={styles.label}>DN: <Text style={styles.value}>{format(new Date(patient.birth_date), "dd/MM/yyyy")}</Text></Text>
+            <Text style={styles.label}>DATA: <Text style={styles.value}>{format(new Date(service.created_at), "dd/MM/yyyy")}</Text></Text>
           </View>
         </View>
 
-        {/* Conteúdo dos Exames */}
-        <View style={styles.content}>
-          {sectorOrder.map(sector => {
-            if (!groups[sector]) return null;
-            
-            return (
-              <View key={sector} wrap={false}>
-                <Text style={styles.sectorTitle}>{sector}</Text>
-                {groups[sector].map((se: any) => (
-                  <View key={se.id} style={styles.examBlock} wrap={false}>
-                    <Text style={styles.examName}>{se.exams?.name}</Text>
-                    {se.result_value?.replace(/\?/g, '').split('\n').map((line: string, i: number) => {
-                      const isRef = line.toLowerCase().includes("referência") || 
-                                    line.toLowerCase().includes("ref:") || 
-                                    line.toLowerCase().includes("valor:") || 
-                                    line.toLowerCase().includes("vr:");
-                      return (
-                        <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
-                          {line.trim()}
-                        </Text>
-                      );
-                    })}
-                  </View>
-                ))}
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Rodapé Fixo */}
-        <Text 
-          style={styles.footer} 
-          render={({ pageNumber, totalPages }) => (
-            `Lab Acajutiba - Inovação & Precisão | Página ${pageNumber} de ${totalPages}`
-          )} 
-          fixed 
-        />
+        {/* Conteúdo dos Exames por Setor */}
+        {sectorOrder.map(sector => {
+          if (!groups[sector]) return null;
+          
+          return (
+            <View key={sector} wrap={false}>
+              <Text style={styles.sectorTitle}>{sector}</Text>
+              {groups[sector].map((se: any) => (
+                <View key={se.id} style={styles.examBlock} wrap={false}>
+                  <Text style={styles.examName}>{se.exams?.name}</Text>
+                  {se.result_value?.split('\n').map((line: string, i: number) => {
+                    const isRef = line.toLowerCase().includes("referência") || 
+                                  line.toLowerCase().includes("ref:") || 
+                                  line.toLowerCase().includes("valor:") || 
+                                  line.toLowerCase().includes("vr:");
+                    return (
+                      <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
+                        {line.trim()}
+                      </Text>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          );
+        })}
       </Page>
     </Document>
   );
