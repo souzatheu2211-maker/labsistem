@@ -58,7 +58,6 @@ const styles = StyleSheet.create({
     top: 115, 
     left: 50,
     right: 50,
-    // Linha removida conforme solicitado
     paddingBottom: 10,
   },
   patientRow: {
@@ -74,7 +73,7 @@ const styles = StyleSheet.create({
     fontSize: 13, 
   },
   sectorTitle: {
-    fontSize: 11,
+    fontSize: 12,
     textAlign: 'center',
     textDecoration: 'underline',
     marginTop: 15,
@@ -86,19 +85,19 @@ const styles = StyleSheet.create({
     marginBottom: 20, 
   },
   examName: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     marginBottom: 4,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 9, // Fonte reduzida conforme solicitado
+    fontSize: 12, // Fonte 12 conforme solicitado
     fontFamily: 'Courier', 
-    lineHeight: 1.1,
+    lineHeight: 1.2,
     color: '#000000',
   },
   referenceText: {
-    fontSize: 8, 
+    fontSize: 9, // Fonte menor para referências
     fontFamily: 'Courier',
     color: '#333333',
     marginTop: 1,
@@ -127,6 +126,15 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
 
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
 
+  // Função de limpeza profunda de lixo visual
+  const cleanVisualTrash = (text: string) => {
+    if (!text) return "";
+    return text
+      .replace(/\([\s?&]*\)/g, '') // Remove (?), (&), ( ? ), ( &&& ), etc.
+      .replace(/[?&]{2,}/g, '')    // Remove sequências como ???? ou &&&&
+      .replace(/\(\s*\)/g, '');    // Remove parênteses vazios que sobraram
+  };
+
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
@@ -153,9 +161,8 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
               {groups[sector].map((se: any) => (
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
-                  {se.result_value
-                    ?.replace(/\([?&]+\)/g, '') // Limpeza agressiva de (?) e (&)
-                    ?.split('\n').map((line: string, i: number) => {
+                  {cleanVisualTrash(se.result_value || "")
+                    .split('\n').map((line: string, i: number) => {
                     const isRef = line.toLowerCase().includes("referência") || 
                                   line.toLowerCase().includes("ref:") || 
                                   line.toLowerCase().includes("valor:") || 
