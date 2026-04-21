@@ -1,18 +1,31 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useNavigate } from 'react-router-dom';
+import { showSuccess, showError } from '@/utils/toast';
 
 const LoginForm = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Login Fake
+    if (email === 'adm@lab.com' && password === '1234') {
+      showSuccess('Acesso autorizado! Bem-vindo.');
+      navigate('/dashboard');
+    } else {
+      showError('Credenciais inválidas. Tente novamente.');
+    }
   };
 
   return (
     <div className="flex flex-col items-center w-full max-w-sm animate-in fade-in zoom-in duration-700">
-      {/* Container do Formulário */}
       <div className="w-full p-8 bg-blue-950/40 backdrop-blur-xl rounded-[2.5rem] shadow-2xl border border-white/10">
         
         <div className="text-center mb-6">
@@ -27,6 +40,8 @@ const LoginForm = () => {
               <Input
                 type="email"
                 placeholder="nome@lab.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="bg-blue-900/20 border-blue-500/20 text-white placeholder:text-blue-300/30 h-12 pl-10 rounded-2xl focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                 required
               />
@@ -39,6 +54,8 @@ const LoginForm = () => {
               <Input
                 type="password"
                 placeholder="Senha"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="bg-blue-900/20 border-blue-500/20 text-white placeholder:text-blue-300/30 h-12 pl-10 rounded-2xl focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                 required
               />
@@ -60,7 +77,6 @@ const LoginForm = () => {
         </form>
       </div>
 
-      {/* Créditos */}
       <div className="mt-6 text-center space-y-1 animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
         <p className="text-blue-100/80 text-sm font-medium tracking-wide">
           Desenvolvido por <span className="text-blue-400">Matheus Souza</span>
