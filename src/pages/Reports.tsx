@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Search, Printer, FileText, Download, User, Loader2, CheckCircle2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,6 @@ const Reports = () => {
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
   const [generating, setGenerating] = useState(false);
-  const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (search.length > 2) {
@@ -46,7 +45,6 @@ const Reports = () => {
     setPatients([]);
     setSearch('');
     
-    // Buscar atendimentos finalizados
     const { data } = await supabase
       .from('services')
       .select(`
@@ -67,25 +65,35 @@ const Reports = () => {
     setGenerating(true);
     try {
       const element = document.getElementById(`report-content-${service.id}`);
-      if (!element) return;
+      if (!element) {
+        throw new Error("Elemento do laudo não encontrado.");
+      }
+
+      // Pequeno delay para garantir renderização
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
         logging: false,
+        windowWidth: 794, // Largura aproximada de um A4 em pixels (96dpi)
       });
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      // Ajusta a imagem para preencher a página A4
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Laudo_${selectedPatient.full_name}_${service.id.slice(0, 5)}.pdf`);
+      pdf.save(`Laudo_${selectedPatient.full_name.replace(/\s+/g, '_')}.pdf`);
+      
       showSuccess('Laudo gerado com sucesso!');
-    } catch (error) {
-      showError('Erro ao gerar PDF.');
+    } catch (error: any) {
+      console.error("Erro ao gerar PDF:", error);
+      showError('Erro ao gerar PDF. Tente novamente.');
     } finally {
       setGenerating(false);
     }
@@ -166,18 +174,28 @@ const Reports = () => {
                   </Button>
                 </div>
 
-                {/* Preview do Laudo (Invisível na tela, usado para o PDF) */}
-                <div className="hidden">
+                {/* Container do Laudo (Fora da tela mas visível para o html2canvas) */}
+                <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
                   <div 
                     id={`report-content-${service.id}`}
                     className="bg-white text-black p-0 relative"
-                    style={{ width: '210mm', minHeight: '297mm', fontFamily: '"Times New Roman", Times, serif' }}
+                    style={{ width: '210mm', height: '297mm', overflow: 'hidden', fontFamily: '"Times New Roman", Times, serif' }}
                   >
                     {/* Timbre de Fundo */}
-                    <img src="/src/assets/timbre.png" className="w-full h-full absolute top-0 left-0 object-fill z-0" alt="Timbre" />
+                    <img 
+                      src="/src/assets/timbre.png" 
+                      className="w-full h-full absolute top-0 left-0 object-fill z-0" 
+                      alt="Timbre" 
+                      crossOrigin="anonymous"
+                    />
                     
                     {/* Logo no Canto Superior Direito */}
-                    <img src="/src/assets/logo.png" className="absolute top-8 right-8 w-24 h-auto z-10 grayscale brightness-0" alt="Logo" />
+                    <img 
+                      src="/src/assets/logo.png" 
+                      className="absolute top-8 right-8 w-24 h-auto z-10 grayscale brightness-0 opacity-20" 
+                      alt="Logo" 
+                      crossOrigin="anonymous"
+                    />
 
                     {/* Conteúdo do Laudo */}
                     <div className="relative z-10 px-[25mm] pt-[55mm] pb-[40mm]">
@@ -193,12 +211,12 @@ const Reports = () => {
                       </div>
 
                       {/* Exames */}
-                      <div className="space-y-10">
+                      <div className="space-y-8">
                         {service.service_exams.map((se: any) => (
                           <div key={se.id} className="break-inside-avoid">
-                            <h2 className="text-[14pt] font-bold border-b border-gray-300 mb-4 uppercase tracking-wide">{se.exams?.name}</h2>
+                            <h2 className="text-[14pt] font-bold border-b border-gray-300 mb-3 uppercase tracking-wide">{se.exams?.name}</h2>
                             <div className="whitespace-pre-wrap text-[12pt] leading-relaxed">
-                              {/* Aqui o conteúdo já vem substituído do banco, mas aplicamos estilo menor em valores de ref se necessário via regex ou se já vier formatado */}
+                              {/* Renderização do resultado */}
                               {se.result_value}
                             </div>
                           </div>
