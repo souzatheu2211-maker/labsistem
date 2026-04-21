@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   Calendar,
   Download,
-  Printer
+  Printer,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,14 +25,19 @@ import {
   PDFDownloadLink, 
   Image
 } from "@react-pdf/renderer";
+import { cn } from "@/lib/utils";
 
 const formatSafeDate = (dateStr: string) => {
   if (!dateStr) return "";
-  if (dateStr.length === 10) {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return format(new Date(year, month - 1, day), "dd/MM/yyyy");
+  try {
+    if (dateStr.length === 10) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return format(new Date(year, month - 1, day), "dd/MM/yyyy");
+    }
+    return format(parseISO(dateStr), "dd/MM/yyyy");
+  } catch (e) {
+    return dateStr;
   }
-  return format(parseISO(dateStr), "dd/MM/yyyy");
 };
 
 const styles = StyleSheet.create({
@@ -106,7 +112,6 @@ const styles = StyleSheet.create({
 const LabReportPDF = ({ service, patient, results }: { service: any, patient: any, results: any[] }) => {
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
 
-  // Agrupar resultados por exame
   const examsWithResults = service.service_exams.map((se: any) => {
     const examResults = results.filter(r => r.service_exam_id === se.id);
     return { ...se, results: examResults };
@@ -197,12 +202,11 @@ const Reports = () => {
     setPatients([]);
     setSearch("");
     
-    // Buscar atendimentos finalizados
+    // Buscar TODOS os atendimentos (removido filtro de status para debug)
     const { data: srvs } = await supabase
       .from("services")
       .select(`*, service_exams (*, exams (id, name))`)
       .eq("patient_id", patient.id)
-      .eq("status", "finalizado")
       .order("created_at", { ascending: false });
     
     setServices(srvs || []);
@@ -211,13 +215,11 @@ const Reports = () => {
       const serviceExamIds = srvs.flatMap(s => s.service_exams.map((se: any) => se.id));
       const examIds = srvs.flatMap(s => s.service_exams.map((se: any) => se.exams.id));
 
-      // Buscar resultados estruturados e referências
       const [resData, refData] = await Promise.all([
         supabase.from('service_exam_results').select('*').in('service_exam_id', serviceExamIds),
         supabase.from('reference_values').select('*').in('exam_id', examIds)
       ]);
 
-      // Mapear resultados com suas referências
       const mappedResults = resData.data?.map(r => {
         const serviceExam = srvs.flatMap(s => s.service_exams).find((se: any) => se.id === r.service_exam_id);
         const ref = refData.data?.find(rf => rf.exam_id === serviceExam?.exam_id && rf.parameter === r.parameter_name);
@@ -279,27 +281,47 @@ const Reports = () => {
         )}
 
         <div className="grid grid-cols-1 gap-4">
-          {services.map((service) => (
-            <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-600/10 rounded-xl text-blue-400"><Calendar className="w-5 h-5" /></div>
-                <div>
-                  <h3 className="text-white font-bold uppercase text-sm">Atendimento de {formatSafeDate(service.created_at)}</h3>
-                  <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">Registro: #{service.id.slice(0, 8).toUpperCase()}</p>
+          {services.map((service) => {
+            const hasResults = allResults.some(r => service.service_exams.some((se: any) => se.id === r.service_exam_id));
+            
+            return (
+              <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-600/10 rounded-xl text-blue-400"><Calendar className="w-5 h-5" /></div>
+                  <div>
+                    <h3 className="text-white font-bold uppercase text-sm">Atendimento de {formatSafeDate(service.created_at)}</h3>
+                    <div className="flex items-center gap-3 mt-1">
+                      <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">Registro: #{service.id.slice(0, 8).toUpperCase()}</p>
+                      <span className={cn(
+                        "text-[8px] font-black px-2 py-0.5 rounded-full uppercase",
+                        service.status === 'finalizado' ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
+                      )}>
+                        {service.status}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <PDFDownloadLink 
-                document={<LabReportPDF service={service} patient={selectedPatient} results={allResults} />} 
-                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}.pdf`}
-              >
-                {({ loading: pdfLoading }) => (
-                  <Button className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-blue-900/20" disabled={pdfLoading}>
-                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar Laudo Oficial</>}
-                  </Button>
+                
+                {hasResults ? (
+                  <PDFDownloadLink 
+                    document={<LabReportPDF service={service} patient={selectedPatient} results={allResults} />} 
+                    fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}.pdf`}
+                  >
+                    {({ loading: pdfLoading }) => (
+                      <Button className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-blue-900/20" disabled={pdfLoading}>
+                        {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar Laudo Oficial</>}
+                      </Button>
+                    )}
+                  </PDFDownloadLink>
+                ) : (
+                  <div className="flex items-center gap-2 text-amber-400/50 text-[10px] font-bold uppercase">
+                    <AlertCircle className="w-4 h-4" />
+                    Sem resultados lançados
+                  </div>
                 )}
-              </PDFDownloadLink>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </DashboardLayout>
