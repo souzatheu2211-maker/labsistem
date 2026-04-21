@@ -23,15 +23,16 @@ import {
   View, 
   StyleSheet, 
   PDFDownloadLink, 
-  Image,
-  Font
+  Image
 } from "@react-pdf/renderer";
 
-// Estilos refinados para um laudo profissional
+// Dimensões A4 em pontos (pt): 595.28 x 841.89
+// 1mm = 2.834pt
+// 40mm = ~113pt
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 180, 
-    paddingBottom: 80,
+    paddingTop: 185, // Espaço reservado para o cabeçalho fixo (Timbre + Info Paciente)
+    paddingBottom: 90,
     paddingHorizontal: 45,
     fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
@@ -42,29 +43,35 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 130,
+    height: 175, // Altura total do cabeçalho fixo
+    paddingHorizontal: 45,
+  },
+  timbreContainer: {
+    width: '100%',
+    height: 115, // ~40mm de altura fixa para o timbre
+    marginTop: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   timbre: {
     width: '100%',
     height: '100%',
-    objectFit: 'contain', // Garante que a imagem não estique
+    objectFit: 'contain', // GARANTE PROPORÇÃO ORIGINAL SEM DISTORÇÃO
   },
   patientInfoContainer: {
-    position: 'absolute',
-    top: 125,
-    left: 45,
-    right: 45,
+    width: '100%',
     borderTopWidth: 1.5,
-    borderTopColor: '#2563eb', // Azul do sistema
+    borderTopColor: '#2563eb',
     borderBottomWidth: 0.5,
     borderBottomColor: '#e5e7eb',
-    paddingVertical: 10,
-    marginBottom: 20,
+    paddingVertical: 8,
+    marginTop: 5,
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   patientLabel: {
     fontSize: 9,
@@ -82,7 +89,7 @@ const styles = StyleSheet.create({
     gap: 25,
   },
   content: {
-    marginTop: 10,
+    marginTop: 5,
   },
   sectorTitle: {
     fontSize: 10,
@@ -90,27 +97,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     backgroundColor: '#f3f4f6',
     paddingVertical: 4,
-    marginTop: 15,
-    marginBottom: 12,
+    marginTop: 12,
+    marginBottom: 10,
     textTransform: 'uppercase',
     letterSpacing: 1,
     color: '#374151',
     borderRadius: 2,
   },
   examBlock: {
-    marginBottom: 15,
+    marginBottom: 12,
     paddingLeft: 5,
   },
   examName: {
     fontSize: 10,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 4,
     textTransform: 'uppercase',
-    color: '#1e40af', // Azul escuro para destaque
-  },
-  resultLine: {
-    flexDirection: 'row',
-    marginBottom: 2,
+    color: '#1e40af',
   },
   resultText: {
     fontSize: 10,
@@ -131,10 +134,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   signatureLine: {
-    width: 200,
+    width: 180,
     borderTopWidth: 0.5,
     borderTopColor: '#374151',
-    marginTop: 40,
+    marginTop: 30,
     marginBottom: 4,
   },
   signatureText: {
@@ -202,9 +205,11 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
-        {/* Cabeçalho Fixo com Timbre Preservado */}
+        {/* Cabeçalho Fixo em Todas as Páginas */}
         <View fixed style={styles.fixedHeader}>
-          <Image src={timbreUrl} style={styles.timbre} />
+          <View style={styles.timbreContainer}>
+            <Image src={timbreUrl} style={styles.timbre} />
+          </View>
           <View style={styles.patientInfoContainer}>
             <View style={styles.patientRow}>
               <Text style={styles.patientLabel}>Paciente: <Text style={styles.patientValue}>{patient.full_name.toUpperCase()}</Text></Text>
@@ -218,7 +223,7 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
           </View>
         </View>
 
-        {/* Conteúdo dos Exames */}
+        {/* Conteúdo Dinâmico */}
         <View style={styles.content}>
           {sectorOrder.map(sector => {
             if (!groups[sector]) return null;
@@ -248,14 +253,14 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
           })}
         </View>
 
-        {/* Área de Assinatura */}
+        {/* Assinatura Fixa na Última Página (ou em todas se preferir, aqui está fixa) */}
         <View style={styles.signatureArea} fixed>
           <View style={styles.signatureLine} />
           <Text style={styles.signatureText}>Matheus Souza</Text>
           <Text style={[styles.signatureText, { fontWeight: 'normal', fontSize: 7 }]}>Técnico em Patologia Clínica • CRF-BA 805.994</Text>
         </View>
 
-        {/* Rodapé */}
+        {/* Rodapé Fixo */}
         <Text 
           style={styles.footer} 
           render={({ pageNumber, totalPages }) => (
