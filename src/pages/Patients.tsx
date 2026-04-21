@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { 
   UserPlus, 
@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   User,
   MapPin,
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,17 +24,93 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { showSuccess } from '@/utils/toast';
+import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 const Patients = () => {
   const [step, setStep] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const patients: any[] = []; // Dados fakes removidos
+  const [loading, setLoading] = useState(false);
+  const [patients, setPatients] = useState<any[]>([]);
 
-  const handleSave = () => {
-    showSuccess('Paciente cadastrado com sucesso!');
-    setStep(1);
+  // Estado do formulário
+  const [formData, setFormData] = useState({
+    full_name: '',
+    cpf: '',
+    birth_date: '',
+    gender: 'masculino',
+    phone: '',
+    address: '',
+    observations: ''
+  });
+
+  useEffect(() => {
+    if (searchQuery.length > 2) {
+      searchPatients();
+    } else {
+      setPatients([]);
+    }
+  }, [searchQuery]);
+
+  const searchPatients = async () => {
+    const { data, error } = await supabase
+      .from('patients')
+      .select('*')
+      .or(`full_name.ilike.%${searchQuery}%,cpf.ilike.%${searchQuery}%`)
+      .limit(5);
+    
+    if (!error) setPatients(data || []);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (value: string) => {
+    setFormData(prev => ({ ...prev, gender: value }));
+  };
+
+  const handleSave = async () => {
+    if (!formData.full_name) {
+      showError('O nome completo é obrigatório.');
+      setStep(1);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { error } = await supabase
+        .from('patients')
+        .insert([
+          { 
+            ...formData,
+            created_by: user?.id 
+          }
+        ]);
+
+      if (error) throw error;
+
+      showSuccess('Paciente cadastrado com sucesso!');
+      setFormData({
+        full_name: '',
+        cpf: '',
+        birth_date: '',
+        gender: 'masculino',
+        phone: '',
+        address: '',
+        observations: ''
+      });
+      setStep(1);
+      setSearchQuery('');
+    } catch (error: any) {
+      showError(error.message || 'Erro ao salvar paciente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -59,7 +136,22 @@ const Patients = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          {searchQuery && patients.length === 0 && (
+          
+          {searchQuery && patients.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {patients.map(p => (
+                <div key={p.id} className="flex items-center justify-between p-4 bg-blue-900/10 border border-white/5 rounded-xl">
+                  <div>
+                    <p className="text-sm font-bold text-white uppercase">{p.full_name}</p>
+                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">CPF: {p.cpf || 'Não informado'}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 font-bold uppercase text-[10px]">Ver Detalhes</Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {searchQuery && searchQuery.length > 2 && patients.length === 0 && (
             <p className="text-center py-6 text-blue-300/20 font-bold uppercase text-xs tracking-widest">Nenhum paciente encontrado</p>
           )}
         </div>
@@ -83,19 +175,35 @@ const Patients = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-right duration-500">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest">Nome Completo</label>
-                  <Input className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" />
+                  <Input 
+                    name="full_name"
+                    value={formData.full_name}
+                    onChange={handleInputChange}
+                    className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest">CPF</label>
-                  <Input className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" />
+                  <Input 
+                    name="cpf"
+                    value={formData.cpf}
+                    onChange={handleInputChange}
+                    className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest">Data de Nascimento</label>
-                  <Input type="date" className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" />
+                  <Input 
+                    type="date" 
+                    name="birth_date"
+                    value={formData.birth_date}
+                    onChange={handleInputChange}
+                    className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest">Sexo</label>
-                  <Select defaultValue="masculino">
+                  <Select value={formData.gender} onValueChange={handleSelectChange}>
                     <SelectTrigger className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold">
                       <SelectValue />
                     </SelectTrigger>
@@ -113,11 +221,21 @@ const Patients = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-right duration-500">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest">Telefone / WhatsApp</label>
-                  <Input className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" />
+                  <Input 
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest">Endereço</label>
-                  <Input className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" />
+                  <Input 
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" 
+                  />
                 </div>
               </div>
             )}
@@ -125,16 +243,40 @@ const Patients = () => {
             {step === 3 && (
               <div className="space-y-2 animate-in fade-in slide-in-from-right duration-500">
                 <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest">Observações Clínicas</label>
-                <Textarea className="bg-blue-900/20 border-blue-500/10 min-h-[150px] rounded-2xl text-white font-bold resize-none" />
+                <Textarea 
+                  name="observations"
+                  value={formData.observations}
+                  onChange={handleInputChange}
+                  className="bg-blue-900/20 border-blue-500/10 min-h-[150px] rounded-2xl text-white font-bold resize-none" 
+                />
               </div>
             )}
 
             <div className="mt-12 flex items-center justify-between pt-8 border-t border-white/5">
-              <Button variant="ghost" onClick={() => setStep(s => s - 1)} disabled={step === 1} className="text-blue-300/40 hover:text-blue-100 font-bold uppercase text-xs">Anterior</Button>
+              <Button 
+                variant="ghost" 
+                onClick={() => setStep(s => s - 1)} 
+                disabled={step === 1 || loading} 
+                className="text-blue-300/40 hover:text-blue-100 font-bold uppercase text-xs"
+              >
+                Anterior
+              </Button>
               {step < 3 ? (
-                <Button onClick={() => setStep(s => s + 1)} className="bg-blue-600 hover:bg-blue-500 rounded-xl px-8 font-bold uppercase text-xs">Próximo</Button>
+                <Button 
+                  onClick={() => setStep(s => s + 1)} 
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-500 rounded-xl px-8 font-bold uppercase text-xs"
+                >
+                  Próximo
+                </Button>
               ) : (
-                <Button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-500 rounded-xl px-8 font-bold uppercase text-xs">Finalizar</Button>
+                <Button 
+                  onClick={handleSave} 
+                  disabled={loading}
+                  className="bg-emerald-600 hover:bg-emerald-500 rounded-xl px-8 font-bold uppercase text-xs gap-2"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Finalizar Cadastro'}
+                </Button>
               )}
             </div>
           </div>
