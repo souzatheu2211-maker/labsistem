@@ -1,12 +1,37 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Settings, Users, FlaskConical, FileText, Plus } from 'lucide-react';
+import { Settings, Users, FlaskConical, FileText, Plus, UserCircle, Shield, Trash2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 const SettingsPage = () => {
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('first_name');
+      
+      if (error) throw error;
+      setEmployees(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar funcionários:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-700">
@@ -39,12 +64,40 @@ const SettingsPage = () => {
                   <Plus className="w-4 h-4" /> Novo Funcionário
                 </Button>
               </div>
-              <div className="text-center py-12 opacity-20">
-                <p className="font-bold uppercase tracking-widest">Nenhum funcionário cadastrado</p>
-              </div>
+
+              {loading ? (
+                <div className="flex justify-center py-12">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : employees.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {employees.map((emp) => (
+                    <div key={emp.id} className="bg-blue-900/20 border border-white/5 p-5 rounded-2xl flex items-center gap-4 group hover:border-blue-500/30 transition-all">
+                      <div className="w-12 h-12 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400">
+                        <UserCircle className="w-8 h-8" />
+                      </div>
+                      <div className="flex-grow">
+                        <p className="text-sm font-bold text-white uppercase">{emp.first_name} {emp.last_name}</p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <Shield className={cn("w-3 h-3", emp.role === 'admin' ? "text-amber-400" : "text-blue-400")} />
+                          <span className="text-[10px] font-black uppercase tracking-widest opacity-50">{emp.role}</span>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="icon" className="text-red-400/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 opacity-20">
+                  <p className="font-bold uppercase tracking-widest">Nenhum funcionário cadastrado</p>
+                </div>
+              )}
             </div>
           </TabsContent>
 
+          {/* Outras abas permanecem como placeholders por enquanto */}
           <TabsContent value="exams" className="animate-in fade-in slide-in-from-top duration-500">
             <div className="bg-blue-950/30 border border-white/5 rounded-[2.5rem] p-8 backdrop-blur-sm">
               <div className="flex justify-between items-center mb-8">
