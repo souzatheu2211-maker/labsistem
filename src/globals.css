@@ -8,6 +8,10 @@
     --foreground: 222.2 84% 4.9%;
     --radius: 0.75rem;
   }
+  
+  html {
+    font-size: 14px; /* Reduzido de 16px para 14px */
+  }
 }
 
 @layer utilities {
