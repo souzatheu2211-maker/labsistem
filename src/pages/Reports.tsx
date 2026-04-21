@@ -30,7 +30,6 @@ import {
 // Função para formatar data sem erro de fuso horário (UTC para Local)
 const formatSafeDate = (dateStr: string) => {
   if (!dateStr) return "";
-  // Se for apenas data (YYYY-MM-DD), dividimos e criamos o objeto localmente
   if (dateStr.length === 10) {
     const [year, month, day] = dateStr.split('-').map(Number);
     return format(new Date(year, month - 1, day), "dd/MM/yyyy");
@@ -41,7 +40,7 @@ const formatSafeDate = (dateStr: string) => {
 // Configuração de Estilos para o PDF (A4)
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 165,    // Espaço para o cabeçalho e info do paciente
+    paddingTop: 170,    // Espaço para o cabeçalho e info do paciente
     paddingBottom: 80,  // Espaço para o rodapé do timbre
     paddingHorizontal: 50,
     fontFamily: 'Times-Roman',
@@ -56,52 +55,53 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: 'absolute',
-    top: 115, // Ajustado para respeitar a margem do timbre
+    top: 115, // Respeitando a margem do timbre
     left: 50,
     right: 50,
     borderBottomWidth: 1,
     borderBottomColor: '#000',
-    paddingBottom: 8,
+    paddingBottom: 10,
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 5,
   },
   label: {
-    fontSize: 11, // Aumentado conforme solicitado
+    fontSize: 13, // Aumentado conforme solicitado
     fontWeight: 'bold',
   },
   value: {
-    fontSize: 11, // Aumentado conforme solicitado
+    fontSize: 13, // Aumentado conforme solicitado
   },
   sectorTitle: {
-    fontSize: 11,
+    fontSize: 12,
     textAlign: 'center',
     textDecoration: 'underline',
     marginTop: 15,
-    marginBottom: 10,
+    marginBottom: 12,
     textTransform: 'uppercase',
     fontWeight: 'bold',
   },
   examBlock: {
-    marginBottom: 20, // Aumentado para melhor espaçamento entre exames
+    marginBottom: 25, // Espaçamento generoso entre exames
   },
   examName: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 6,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 10,
-    lineHeight: 1.4, // Melhorado para legibilidade
+    fontSize: 12, // Fonte 12 para o laudo principal
+    lineHeight: 1.4,
     color: '#000000',
   },
   referenceText: {
-    fontSize: 8,
+    fontSize: 9, // Fonte menor para valores de referência
     color: '#333333',
-    marginTop: 2,
+    marginTop: 3,
+    fontStyle: 'italic',
   }
 });
 
@@ -130,10 +130,8 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
-        {/* Timbre como fundo fixo */}
         <Image src={timbreUrl} style={styles.background} fixed />
 
-        {/* Informações do Paciente FIXAS em todas as páginas */}
         <View style={styles.patientInfoFixed} fixed>
           <View style={styles.patientRow}>
             <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
@@ -146,7 +144,6 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
           </View>
         </View>
 
-        {/* Conteúdo dos Exames por Setor */}
         {sectorOrder.map(sector => {
           if (!groups[sector]) return null;
           
@@ -157,13 +154,15 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
                   {se.result_value
-                    ?.replace(/\(\?\)/g, '') // Remove (?) globalmente
-                    ?.replace(/\(&\)/g, '')  // Remove (&) globalmente
+                    ?.replace(/\(\?\)/g, '') 
+                    ?.replace(/\(&\)/g, '')  
                     ?.split('\n').map((line: string, i: number) => {
                     const isRef = line.toLowerCase().includes("referência") || 
                                   line.toLowerCase().includes("ref:") || 
                                   line.toLowerCase().includes("valor:") || 
-                                  line.toLowerCase().includes("vr:");
+                                  line.toLowerCase().includes("vr:") ||
+                                  line.toLowerCase().includes("normal:") ||
+                                  line.toLowerCase().includes("desejável:");
                     return (
                       <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
                         {line.trim()}
@@ -240,7 +239,6 @@ const Reports = () => {
           <p className="text-blue-300/50 text-sm mt-1 font-medium">Busque pacientes e gere PDFs oficiais dos atendimentos finalizados</p>
         </div>
 
-        {/* Barra de Busca */}
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">
           <div className="relative">
             <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
@@ -272,7 +270,6 @@ const Reports = () => {
           )}
         </div>
 
-        {/* Paciente Selecionado */}
         {selectedPatient && (
           <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6 flex items-center justify-between animate-in zoom-in duration-500">
             <div className="flex items-center gap-4">
@@ -288,7 +285,6 @@ const Reports = () => {
           </div>
         )}
 
-        {/* Lista de Atendimentos */}
         <div className="grid grid-cols-1 gap-4">
           {services.map((service) => (
             <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
