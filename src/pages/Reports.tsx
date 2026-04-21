@@ -70,7 +70,12 @@ const Reports = () => {
     setServices(data || []);
   };
 
-  // Função para categorizar exames por setor
+  // Ordem lógica de setores
+  const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA", "OUTROS"];
+
+  // Ordem lógica de exames dentro da Bioquímica
+  const bioOrder = ["GLICOSE", "UREIA", "CREATININA", "COLESTEROL TOTAL", "COLESTEROL HDL", "COLESTEROL LDL", "COLESTEROL VLDL", "TRIGLICERÍDEOS"];
+
   const getSector = (examName: string) => {
     const name = examName.toUpperCase();
     if (name.includes("HEMOGRAMA") || name.includes("SANGUE") || name.includes("ERITRO") || name.includes("LEUCO")) return "HEMATOLOGIA";
@@ -81,13 +86,28 @@ const Reports = () => {
     return "OUTROS";
   };
 
+  const sortExamsInSector = (sector: string, exams: any[]) => {
+    if (sector === "BIOQUÍMICA") {
+      return [...exams].sort((a, b) => {
+        const nameA = a.exams?.name.toUpperCase() || "";
+        const nameB = b.exams?.name.toUpperCase() || "";
+        const idxA = bioOrder.findIndex(item => nameA.includes(item));
+        const idxB = bioOrder.findIndex(item => nameB.includes(item));
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return nameA.localeCompare(nameB);
+      });
+    }
+    return [...exams].sort((a, b) => (a.exams?.name || "").localeCompare(b.exams?.name || ""));
+  };
+
   const generatePDF = async (service: any) => {
     setGenerating(true);
     try {
       const reportElement = document.getElementById(`report-container-${service.id}`);
       if (!reportElement) throw new Error("Elemento não encontrado");
 
-      // Aguarda carregamento de imagens
       await new Promise(r => setTimeout(r, 1000));
 
       const canvas = await html2canvas(reportElement, {
@@ -95,7 +115,7 @@ const Reports = () => {
         useCORS: true,
         allowTaint: true,
         backgroundColor: "#ffffff",
-        windowWidth: 794 // A4 width at 96dpi
+        windowWidth: 794
       });
 
       const imgData = canvas.toDataURL("image/png");
@@ -131,7 +151,6 @@ const Reports = () => {
     }
   };
 
-  // Agrupar exames por setor para renderização
   const groupedExams = (exams: any[]) => {
     const groups: { [key: string]: any[] } = {};
     exams.forEach(se => {
@@ -139,7 +158,23 @@ const Reports = () => {
       if (!groups[sector]) groups[sector] = [];
       groups[sector].push(se);
     });
-    return groups;
+    
+    // Ordenar os setores conforme a ordem definida
+    const sortedGroups: { [key: string]: any[] } = {};
+    sectorOrder.forEach(sector => {
+      if (groups[sector]) {
+        sortedGroups[sector] = sortExamsInSector(sector, groups[sector]);
+      }
+    });
+    
+    // Adicionar setores que não estão na lista pré-definida
+    Object.keys(groups).forEach(sector => {
+      if (!sortedGroups[sector]) {
+        sortedGroups[sector] = sortExamsInSector(sector, groups[sector]);
+      }
+    });
+
+    return sortedGroups;
   };
 
   return (
@@ -200,7 +235,7 @@ const Reports = () => {
           </div>
         )}
 
-        {/* LISTA DE ATENDIMENTOS */}
+        {/* LISTA DE ATENDIMENTOS (CLEAN) */}
         <div className="grid grid-cols-1 gap-4">
           {services.map((service) => (
             <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
@@ -227,11 +262,8 @@ const Reports = () => {
                 <div id={`report-container-${service.id}`} style={{ width: "210mm", background: "#ffffff", color: "#000000" }}>
                   <div style={{ width: "100%", position: "relative" }}>
                     
-                    {/* Timbre de Fundo (Repetido logicamente se necessário, mas aqui renderizamos um bloco contínuo) */}
-                    {/* Para garantir que o timbre apareça em todas as páginas, vamos renderizar o conteúdo em blocos de 297mm */}
-                    
+                    {/* Timbre Background */}
                     <div style={{ padding: "0", position: "relative" }}>
-                      {/* Timbre Background */}
                       <img src="/src/assets/timbre.png" style={{ width: "100%", height: "auto", display: "block" }} />
                       
                       {/* Conteúdo sobreposto ao timbre */}
@@ -239,51 +271,51 @@ const Reports = () => {
                         
                         {/* Cabeçalho do Paciente (Justinho abaixo da linha do timbre) */}
                         <div style={{ 
-                          marginTop: "33mm", // Ajuste preciso para ficar abaixo da linha do timbre
-                          padding: "1mm 0", 
+                          marginTop: "36mm", // Ajuste preciso para ficar logo abaixo da linha do timbre sem tocar
+                          padding: "0", 
                           fontFamily: '"Times New Roman", serif', 
-                          fontSize: "11pt",
+                          fontSize: "9.5pt",
                           lineHeight: "1.2",
                           display: "flex",
                           flexDirection: "column",
-                          gap: "1px"
+                          gap: "2px"
                         }}>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
                             <div style={{ flex: 1 }}><strong>NOME:</strong> {selectedPatient.full_name.toUpperCase()}</div>
                             <div style={{ width: "60mm" }}><strong>REGISTRO:</strong> #{service.id.slice(0, 8).toUpperCase()}</div>
                           </div>
-                          <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <div style={{ flex: 1 }}><strong>CPF:</strong> {selectedPatient.cpf}</div>
-                            <div style={{ width: "40mm" }}><strong>DN:</strong> {format(new Date(selectedPatient.birth_date), "dd/MM/yyyy")}</div>
-                            <div style={{ width: "20mm" }}><strong>IDADE:</strong> {differenceInYears(new Date(), new Date(selectedPatient.birth_date))} ANOS</div>
+                          <div style={{ display: "flex", justifyContent: "flex-start", gap: "15mm" }}>
+                            <div><strong>CPF:</strong> {selectedPatient.cpf}</div>
+                            <div><strong>IDADE:</strong> {differenceInYears(new Date(), new Date(selectedPatient.birth_date))} ANOS</div>
+                            <div><strong>DN:</strong> {format(new Date(selectedPatient.birth_date), "dd/MM/yyyy")}</div>
                           </div>
                         </div>
 
                         {/* Exames por Setor */}
                         <div style={{ marginTop: "8mm", fontFamily: '"Times New Roman", serif' }}>
                           {Object.entries(groupedExams(service.service_exams)).map(([sector, exams]) => (
-                            <div key={sector} style={{ marginBottom: "10mm", pageBreakInside: "avoid" }}>
+                            <div key={sector} style={{ marginBottom: "8mm", pageBreakInside: "avoid" }}>
                               <div style={{ 
-                                fontSize: "10pt", 
+                                fontSize: "9pt", 
                                 fontWeight: "bold", 
                                 textAlign: "center", 
                                 textDecoration: "underline", 
-                                marginBottom: "4mm",
+                                marginBottom: "3mm",
                                 textTransform: "uppercase"
                               }}>
                                 {sector}
                               </div>
                               
                               {exams.map((se: any) => (
-                                <div key={se.id} style={{ marginBottom: "6mm", pageBreakInside: "avoid" }}>
-                                  <div style={{ fontSize: "12pt", fontWeight: "bold", marginBottom: "2mm", textTransform: "uppercase" }}>
+                                <div key={se.id} style={{ marginBottom: "5mm", pageBreakInside: "avoid" }}>
+                                  <div style={{ fontSize: "10.5pt", fontWeight: "bold", marginBottom: "1.5mm", textTransform: "uppercase" }}>
                                     {se.exams?.name}
                                   </div>
-                                  <div style={{ fontSize: "11pt", whiteSpace: "pre-wrap", lineHeight: "1.3" }}>
+                                  <div style={{ fontSize: "9.5pt", whiteSpace: "pre-wrap", lineHeight: "1.3" }}>
                                     {se.result_value?.split('\n').map((line: string, i: number) => {
-                                      const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:");
+                                      const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:") || line.toLowerCase().includes("vr:");
                                       return (
-                                        <div key={i} style={{ fontSize: isRef ? "8pt" : "11pt", color: isRef ? "#444" : "#000" }}>
+                                        <div key={i} style={{ fontSize: isRef ? "7.5pt" : "9.5pt", color: isRef ? "#444" : "#000", marginTop: isRef ? "0.5mm" : "0" }}>
                                           {line}
                                         </div>
                                       );
