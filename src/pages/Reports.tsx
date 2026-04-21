@@ -70,21 +70,15 @@ const Reports = () => {
     setServices(data || []);
   };
 
-  // Função para ordenar exames logicamente (ex: Colesterol Total antes de Frações)
-  const sortExams = (exams: any[]) => {
-    const order = ["HEMOGRAMA", "GLICOSE", "COLESTEROL TOTAL", "COLESTEROL HDL", "COLESTEROL LDL", "TRIGLICERIDEOS", "UREIA", "CREATININA"];
-    return [...exams].sort((a, b) => {
-      const nameA = a.exams?.name.toUpperCase() || "";
-      const nameB = b.exams?.name.toUpperCase() || "";
-      
-      const indexA = order.findIndex(item => nameA.includes(item));
-      const indexB = order.findIndex(item => nameB.includes(item));
-      
-      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-      if (indexA !== -1) return -1;
-      if (indexB !== -1) return 1;
-      return nameA.localeCompare(nameB);
-    });
+  // Função para categorizar exames por setor
+  const getSector = (examName: string) => {
+    const name = examName.toUpperCase();
+    if (name.includes("HEMOGRAMA") || name.includes("SANGUE") || name.includes("ERITRO") || name.includes("LEUCO")) return "HEMATOLOGIA";
+    if (name.includes("GLICOSE") || name.includes("COLESTEROL") || name.includes("TRIGLI") || name.includes("UREIA") || name.includes("CREATININA") || name.includes("TGO") || name.includes("TGP")) return "BIOQUÍMICA";
+    if (name.includes("URINA") || name.includes("EAS")) return "URINÁLISE";
+    if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
+    if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
+    return "OUTROS";
   };
 
   const generatePDF = async (service: any) => {
@@ -94,7 +88,7 @@ const Reports = () => {
       if (!reportElement) throw new Error("Elemento não encontrado");
 
       // Aguarda carregamento de imagens
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 1000));
 
       const canvas = await html2canvas(reportElement, {
         scale: 2,
@@ -115,9 +109,11 @@ const Reports = () => {
       let heightLeft = pdfImgHeight;
       let position = 0;
 
+      // Adiciona a primeira página
       pdf.addImage(imgData, "PNG", 0, position, pageWidth, pdfImgHeight);
       heightLeft -= pageHeight;
 
+      // Adiciona páginas extras se necessário
       while (heightLeft > 0) {
         position = position - pageHeight;
         pdf.addPage();
@@ -133,6 +129,17 @@ const Reports = () => {
     } finally {
       setGenerating(false);
     }
+  };
+
+  // Agrupar exames por setor para renderização
+  const groupedExams = (exams: any[]) => {
+    const groups: { [key: string]: any[] } = {};
+    exams.forEach(se => {
+      const sector = getSector(se.exams?.name || "");
+      if (!groups[sector]) groups[sector] = [];
+      groups[sector].push(se);
+    });
+    return groups;
   };
 
   return (
@@ -193,7 +200,7 @@ const Reports = () => {
           </div>
         )}
 
-        {/* LISTA DE ATENDIMENTOS (CLEAN) */}
+        {/* LISTA DE ATENDIMENTOS */}
         <div className="grid grid-cols-1 gap-4">
           {services.map((service) => (
             <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
@@ -218,62 +225,72 @@ const Reports = () => {
               {/* ESTRUTURA DO LAUDO (FORA DA TELA) */}
               <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
                 <div id={`report-container-${service.id}`} style={{ width: "210mm", background: "#ffffff", color: "#000000" }}>
-                  {/* Simulamos as páginas para o html2canvas capturar tudo de uma vez */}
-                  {/* O jsPDF cuidará de quebrar as páginas a cada 297mm */}
-                  <div style={{ padding: "0", position: "relative" }}>
+                  <div style={{ width: "100%", position: "relative" }}>
                     
-                    {/* Renderizamos o conteúdo de forma contínua, mas com o cabeçalho repetindo a cada 'página' visual */}
-                    {/* Para simplificar e garantir precisão, vamos usar um layout que o html2canvas entenda bem */}
-                    <div style={{ width: "100%", position: "relative" }}>
+                    {/* Timbre de Fundo (Repetido logicamente se necessário, mas aqui renderizamos um bloco contínuo) */}
+                    {/* Para garantir que o timbre apareça em todas as páginas, vamos renderizar o conteúdo em blocos de 297mm */}
+                    
+                    <div style={{ padding: "0", position: "relative" }}>
+                      {/* Timbre Background */}
+                      <img src="/src/assets/timbre.png" style={{ width: "100%", height: "auto", display: "block" }} />
                       
-                      {/* Cabeçalho e Timbre (Fixo no topo da primeira página, mas vamos repetir logicamente se necessário) */}
-                      {/* Como o html2canvas captura o elemento inteiro, vamos organizar os exames e garantir que o cabeçalho do paciente esteja no topo */}
-                      
-                      <div style={{ padding: "20mm", paddingTop: "0" }}>
-                        {/* Timbre */}
-                        <img src="/src/assets/timbre.png" style={{ width: "100%", height: "42mm", objectFit: "cover", marginBottom: "0" }} />
+                      {/* Conteúdo sobreposto ao timbre */}
+                      <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", padding: "0 20mm" }}>
                         
-                        {/* Logo Canto Superior Direito */}
-                        <img src="/src/assets/logo.png" style={{ position: "absolute", top: "10mm", right: "10mm", width: "35mm", filter: "grayscale(100%) brightness(0)" }} />
-
-                        {/* Cabeçalho do Paciente (Justinho) */}
+                        {/* Cabeçalho do Paciente (Justinho abaixo da linha do timbre) */}
                         <div style={{ 
-                          borderBottom: "1px solid black", 
-                          padding: "2mm 0", 
-                          marginBottom: "6mm", 
+                          marginTop: "33mm", // Ajuste preciso para ficar abaixo da linha do timbre
+                          padding: "1mm 0", 
                           fontFamily: '"Times New Roman", serif', 
-                          fontSize: "12pt",
-                          lineHeight: "1.2"
+                          fontSize: "11pt",
+                          lineHeight: "1.2",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "1px"
                         }}>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
                             <div style={{ flex: 1 }}><strong>NOME:</strong> {selectedPatient.full_name.toUpperCase()}</div>
                             <div style={{ width: "60mm" }}><strong>REGISTRO:</strong> #{service.id.slice(0, 8).toUpperCase()}</div>
                           </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1mm" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
                             <div style={{ flex: 1 }}><strong>CPF:</strong> {selectedPatient.cpf}</div>
                             <div style={{ width: "40mm" }}><strong>DN:</strong> {format(new Date(selectedPatient.birth_date), "dd/MM/yyyy")}</div>
                             <div style={{ width: "20mm" }}><strong>IDADE:</strong> {differenceInYears(new Date(), new Date(selectedPatient.birth_date))} ANOS</div>
                           </div>
                         </div>
 
-                        {/* Exames */}
-                        <div style={{ fontFamily: '"Times New Roman", serif' }}>
-                          {sortExams(service.service_exams).map((se: any) => (
-                            <div key={se.id} style={{ marginBottom: "8mm", pageBreakInside: "avoid" }}>
-                              <div style={{ fontSize: "14pt", fontWeight: "bold", marginBottom: "3mm", textTransform: "uppercase", borderBottom: "0.5px solid #eee" }}>
-                                {se.exams?.name}
+                        {/* Exames por Setor */}
+                        <div style={{ marginTop: "8mm", fontFamily: '"Times New Roman", serif' }}>
+                          {Object.entries(groupedExams(service.service_exams)).map(([sector, exams]) => (
+                            <div key={sector} style={{ marginBottom: "10mm", pageBreakInside: "avoid" }}>
+                              <div style={{ 
+                                fontSize: "10pt", 
+                                fontWeight: "bold", 
+                                textAlign: "center", 
+                                textDecoration: "underline", 
+                                marginBottom: "4mm",
+                                textTransform: "uppercase"
+                              }}>
+                                {sector}
                               </div>
-                              <div style={{ fontSize: "12pt", whiteSpace: "pre-wrap", lineHeight: "1.4" }}>
-                                {se.result_value?.split('\n').map((line: string, i: number) => {
-                                  // Lógica para diminuir fonte de valores de referência
-                                  const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:");
-                                  return (
-                                    <div key={i} style={{ fontSize: isRef ? "8.5pt" : "12pt", color: isRef ? "#444" : "#000" }}>
-                                      {line}
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                              
+                              {exams.map((se: any) => (
+                                <div key={se.id} style={{ marginBottom: "6mm", pageBreakInside: "avoid" }}>
+                                  <div style={{ fontSize: "12pt", fontWeight: "bold", marginBottom: "2mm", textTransform: "uppercase" }}>
+                                    {se.exams?.name}
+                                  </div>
+                                  <div style={{ fontSize: "11pt", whiteSpace: "pre-wrap", lineHeight: "1.3" }}>
+                                    {se.result_value?.split('\n').map((line: string, i: number) => {
+                                      const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:");
+                                      return (
+                                        <div key={i} style={{ fontSize: isRef ? "8pt" : "11pt", color: isRef ? "#444" : "#000" }}>
+                                          {line}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           ))}
                         </div>
