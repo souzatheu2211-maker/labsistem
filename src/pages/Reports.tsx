@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showSuccess, showError } from "@/utils/toast";
-import { format, differenceInYears } from "date-fns";
+import { format } from "date-fns";
 import { 
   Document, 
   Page, 
@@ -24,15 +24,13 @@ import {
   View, 
   StyleSheet, 
   PDFDownloadLink, 
-  Image,
-  Font
+  Image
 } from "@react-pdf/renderer";
 
 // Configuração de Estilos para o PDF (A4: 210mm x 297mm)
-// 1mm = 2.834pt. A4 = 595.28pt x 841.89pt
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 160, // Espaço para o timbre fixo
+    paddingTop: 180, // Aumentado para acomodar o timbre maior
     paddingBottom: 60,
     paddingHorizontal: 50,
     fontFamily: 'Helvetica',
@@ -43,26 +41,21 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 150,
-    paddingHorizontal: 40,
-    paddingTop: 10,
+    height: 170,
   },
   timbreContainer: {
     width: '100%',
-    height: 100,
+    height: 130, // Altura definida para o timbre
     marginBottom: 5,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   timbre: {
     width: '100%',
     height: '100%',
-    objectFit: 'contain', // Preserva proporção sem distorcer
   },
   patientHeader: {
     width: '100%',
     paddingVertical: 8,
+    paddingHorizontal: 50, // Mantém o texto alinhado com o conteúdo da página
     marginTop: 2,
   },
   patientRow: {
@@ -182,7 +175,6 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                 {groups[sector].map((se: any) => (
                   <View key={se.id} style={styles.examBlock} wrap={false}>
                     <Text style={styles.examName}>{se.exams?.name}</Text>
-                    {/* Substituição de ? por vazio caso tenha sobrado algum, embora o Results.tsx já salve o texto final */}
                     {se.result_value?.replace(/\?/g, '').split('\n').map((line: string, i: number) => {
                       const isRef = line.toLowerCase().includes("referência") || 
                                     line.toLowerCase().includes("ref:") || 
