@@ -23,16 +23,12 @@ import {
   View, 
   StyleSheet, 
   PDFDownloadLink, 
-  Image,
-  Font
+  Image
 } from "@react-pdf/renderer";
-
-// Registro de fontes para garantir consistência (opcional, usando as padrão por enquanto)
-// O react-pdf usa fontes padrão como Helvetica/Times-Roman por padrão.
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 160, // Espaço para o cabeçalho fixo
+    paddingTop: 170, // Aumentado levemente para dar respiro após o cabeçalho
     paddingBottom: 60,
     paddingHorizontal: 50,
     fontFamily: 'Times-Roman',
@@ -43,20 +39,20 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 0,
   },
   timbre: {
     width: '100%',
-    height: 'auto',
+    // Removido height auto para evitar conflitos em containers absolutos
+    // O react-pdf mantém a proporção se apenas a largura for definida
   },
   patientInfoContainer: {
     position: 'absolute',
-    top: 115, // Ajustado para ficar logo abaixo da linha do timbre
+    top: 125, // Posicionado precisamente abaixo da arte do timbre
     left: 50,
     right: 50,
     borderBottomWidth: 1,
     borderBottomColor: '#eeeeee',
-    paddingBottom: 10,
+    paddingBottom: 8,
     marginBottom: 20,
   },
   patientRow: {
@@ -65,11 +61,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   patientLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
   },
   patientValue: {
-    fontSize: 11,
+    fontSize: 10,
   },
   patientSubRow: {
     flexDirection: 'row',
@@ -80,25 +76,25 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     textDecoration: 'underline',
-    marginTop: 20,
+    marginTop: 15,
     marginBottom: 10,
     textTransform: 'uppercase',
   },
   examBlock: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
   examName: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 4,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 12,
-    lineHeight: 1.4,
+    fontSize: 11,
+    lineHeight: 1.3,
   },
   referenceText: {
-    fontSize: 8.5,
+    fontSize: 8,
     color: '#555555',
     marginTop: 2,
     fontStyle: 'italic',
@@ -114,7 +110,6 @@ const styles = StyleSheet.create({
   }
 });
 
-// Componente do Documento PDF
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA", "OUTROS"];
   
@@ -155,13 +150,11 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
     groups[sector].push(se);
   });
 
-  // Caminho da imagem corrigido para produção (usando URL absoluta do domínio)
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Cabeçalho Fixo em todas as páginas */}
         <View fixed style={styles.fixedHeader}>
           <Image src={timbreUrl} style={styles.timbre} />
           <View style={styles.patientInfoContainer}>
@@ -177,7 +170,6 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
           </View>
         </View>
 
-        {/* Conteúdo dos Exames */}
         {sectorOrder.map(sector => {
           if (!groups[sector]) return null;
           const sortedExams = sortExams(groups[sector]);
@@ -277,7 +269,6 @@ const Reports = () => {
           <p className="text-blue-300/50 text-sm mt-1 font-medium">Baixe os resultados oficiais em formato PDF estruturado</p>
         </div>
 
-        {/* BUSCA */}
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">
           <div className="relative">
             <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
@@ -324,7 +315,6 @@ const Reports = () => {
           </div>
         )}
 
-        {/* LISTA DE ATENDIMENTOS */}
         <div className="grid grid-cols-1 gap-4">
           {services.map((service) => (
             <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
