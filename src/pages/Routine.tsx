@@ -2,32 +2,37 @@
 
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Search, Calendar as CalendarIcon, Clock, User, FlaskConical, AlertCircle, Loader2 } from 'lucide-react';
+import { Search, Calendar as CalendarIcon, Clock, User, FlaskConical, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay, addDays, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const Routine = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [services, setServices] = useState<any[]>([]);
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   useEffect(() => {
     fetchServices();
     
-    // Realtime subscription para atualizar a fila automaticamente
     const channel = supabase
       .channel('routine-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, () => fetchServices())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [selectedDate]);
 
   const fetchServices = async () => {
     setLoading(true);
+    
+    const start = startOfDay(selectedDate).toISOString();
+    const end = endOfDay(selectedDate).toISOString();
+
     const { data, error } = await supabase
       .from('services')
       .select(`
@@ -39,6 +44,8 @@ const Routine = () => {
           exams (name)
         )
       `)
+      .gte('created_at', start)
+      .lte('created_at', end)
       .order('created_at', { ascending: false });
 
     if (!error) setServices(data || []);
@@ -61,18 +68,38 @@ const Routine = () => {
             </h1>
             <p className="text-blue-300/50 text-sm mt-1 font-medium">Fila de atendimentos e status de processamento</p>
           </div>
-          <div className="bg-blue-900/20 border border-white/5 px-4 py-2 rounded-xl flex items-center gap-2 text-blue-100">
-            <CalendarIcon className="w-4 h-4 text-blue-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest">
-              {format(new Date(), "dd 'de' MMMM, yyyy", { locale: ptBR })}
-            </span>
+          
+          {/* Seletor de Data Funcional */}
+          <div className="flex items-center gap-2 bg-blue-950/40 border border-white/5 p-1 rounded-2xl">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setSelectedDate(prev => subDays(prev, 1))}
+              className="text-blue-400 hover:bg-blue-500/10 rounded-xl h-10 w-10"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <div className="px-4 flex items-center gap-3 min-w-[180px] justify-center">
+              <CalendarIcon className="w-4 h-4 text-blue-400" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-blue-100">
+                {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
+              </span>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setSelectedDate(prev => addDays(prev, 1))}
+              className="text-blue-400 hover:bg-blue-500/10 rounded-xl h-10 w-10"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
           </div>
         </div>
 
         <div className="relative">
           <Search className="absolute left-4 top-3 h-4 w-4 text-blue-300/30" />
           <Input 
-            placeholder="Buscar por Nome ou CPF..." 
+            placeholder="Buscar por Nome ou CPF na data selecionada..." 
             className="bg-blue-950/40 border-white/5 h-10 pl-10 rounded-xl text-white font-bold text-xs"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -147,7 +174,7 @@ const Routine = () => {
           <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] overflow-hidden backdrop-blur-sm min-h-[400px] flex items-center justify-center">
             <div className="text-center opacity-20">
               <Clock className="w-12 h-12 mx-auto mb-4" />
-              <p className="font-bold uppercase tracking-widest">Fila de espera vazia</p>
+              <p className="font-bold uppercase tracking-widest">Nenhum atendimento nesta data</p>
             </div>
           </div>
         )}
