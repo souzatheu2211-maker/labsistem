@@ -56,27 +56,33 @@ const Results = () => {
   const handleSelectExam = async (se: any) => {
     setSelectedExam(se);
     
-    // Buscar referências configuradas para este exame
-    const { data: refs } = await supabase
-      .from('reference_values')
-      .select('*')
+    // Buscar o Pré-Modelo vinculado a este exame
+    const { data: report } = await supabase
+      .from('pre_reports')
+      .select('*, pre_report_items (*)')
       .eq('exam_id', se.exam_id)
-      .order('created_at');
+      .single();
 
-    setParameters(refs || []);
+    if (report) {
+      const items = report.pre_report_items.sort((a: any, b: any) => a.line_order - b.line_order);
+      setParameters(items);
 
-    // Buscar resultados já salvos, se existirem
-    const { data: existingResults } = await supabase
-      .from('service_exam_results')
-      .select('*')
-      .eq('service_exam_id', se.id);
+      // Buscar resultados já salvos
+      const { data: existingResults } = await supabase
+        .from('service_exam_results')
+        .select('*')
+        .eq('service_exam_id', se.id);
 
-    const initialValues: Record<string, string> = {};
-    refs?.forEach(r => {
-      const saved = existingResults?.find(er => er.parameter_name === r.parameter);
-      initialValues[r.parameter] = saved?.value || '';
-    });
-    setValues(initialValues);
+      const initialValues: Record<string, string> = {};
+      items.forEach((r: any) => {
+        const saved = existingResults?.find(er => er.parameter_name === r.parameter);
+        initialValues[r.parameter] = saved?.value || '';
+      });
+      setValues(initialValues);
+    } else {
+      setParameters([]);
+      showError('Nenhum pré-modelo configurado para este exame.');
+    }
   };
 
   const handleValueChange = (param: string, val: string) => {
@@ -87,30 +93,21 @@ const Results = () => {
     if (!selectedExam) return;
     setSubmitting(true);
     try {
-      // 1. Salvar resultados estruturados
       const resultsToInsert = Object.entries(values).map(([param, val]) => ({
         service_exam_id: selectedExam.id,
         parameter_name: param,
         value: val
       }));
 
-      // Limpar antigos e inserir novos
       await supabase.from('service_exam_results').delete().eq('service_exam_id', selectedExam.id);
       const { error: resError } = await supabase.from('service_exam_results').insert(resultsToInsert);
       
       if (resError) throw resError;
 
-      // 2. Atualizar status do exame
-      const { error: examError } = await supabase
-        .from('service_exams')
-        .update({ status: 'finalizado' })
-        .eq('id', selectedExam.id);
+      await supabase.from('service_exams').update({ status: 'finalizado' }).eq('id', selectedExam.id);
 
-      if (examError) throw examError;
-
-      showSuccess('Resultados estruturados salvos!');
+      showSuccess('Resultados salvos com base no modelo!');
       
-      // Verificar se todos os exames do atendimento foram finalizados
       const updatedExams = selectedService.service_exams.map((se: any) => 
         se.id === selectedExam.id ? { ...se, status: 'finalizado' } : se
       );
@@ -140,9 +137,9 @@ const Results = () => {
           <div>
             <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
               <FileCheck className="w-6 h-6 text-blue-400" />
-              Lançamento Estruturado
+              Lançamento por Modelo
             </h1>
-            <p className="text-blue-300/50 text-sm mt-1 font-medium">Insira os valores baseados nas referências do sistema</p>
+            <p className="text-blue-300/50 text-sm mt-1 font-medium">Preencha os resultados seguindo a estrutura do pré-laudo</p>
           </div>
           {selectedService && (
             <Button variant="ghost" onClick={() => { setSelectedService(null); setSelectedExam(null); }} className="text-blue-400 hover:bg-blue-500/10 font-bold uppercase text-[10px]">
@@ -248,18 +245,18 @@ const Results = () => {
                   <div className="flex items-center justify-between mb-8">
                     <div>
                       <h3 className="text-xl font-black text-white uppercase tracking-tight">{selectedExam.exams?.name}</h3>
-                      <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Preenchimento de Parâmetros</p>
+                      <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Preenchimento Baseado no Modelo</p>
                     </div>
                     <Button 
                       onClick={handleSaveResult}
                       disabled={submitting}
                       className="bg-emerald-600 hover:bg-emerald-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-emerald-900/20"
                     >
-                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Finalizar Exame</>}
+                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Salvar Resultados</>}
                     </Button>
                   </div>
 
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     {parameters.length > 0 ? (
                       parameters.map((param) => (
                         <div key={param.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-blue-900/10 rounded-2xl border border-white/5">
@@ -277,11 +274,11 @@ const Results = () => {
                             />
                           </div>
                           <div className="md:col-span-1">
-                            <label className="text-[10px] font-black text-blue-300/30 uppercase tracking-widest block mb-1">Referência</label>
+                            <label className="text-[10px] font-black text-blue-300/30 uppercase tracking-widest block mb-1">Referência do Modelo</label>
                             <p className="text-[10px] text-blue-300/50 font-medium italic">
-                              {selectedService.patients?.gender === 'masculino' ? param.male_ref : 
-                               selectedService.patients?.gender === 'feminino' ? param.female_ref : 
-                               param.general_ref} {param.unit}
+                              {selectedService.patients?.gender === 'masculino' ? param.ref_male : 
+                               selectedService.patients?.gender === 'feminino' ? param.ref_female : 
+                               param.ref_general} {param.unit}
                             </p>
                           </div>
                         </div>
@@ -289,8 +286,8 @@ const Results = () => {
                     ) : (
                       <div className="text-center py-12 border-2 border-dashed border-white/5 rounded-2xl">
                         <p className="text-blue-300/20 font-bold uppercase text-xs tracking-widest">
-                          Nenhuma referência cadastrada para este exame.<br/>
-                          Configure em Configurações > Cadastro de Exames.
+                          Nenhum pré-modelo configurado para este exame.<br/>
+                          Configure em Configurações > Modelos de Laudos.
                         </p>
                       </div>
                     )}
