@@ -9,7 +9,10 @@ import {
   Settings, 
   LogOut,
   Search,
-  Bell
+  Bell,
+  PlusCircle,
+  ClipboardList,
+  FileCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +48,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
         </div>
 
-        <nav className="flex-grow space-y-2">
+        <nav className="flex-grow space-y-1.5">
           <SidebarItem 
             icon={LayoutDashboard} 
             label="Painel Geral" 
@@ -53,16 +56,29 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
             active={location.pathname === '/dashboard'} 
           />
           <SidebarItem 
+            icon={PlusCircle} 
+            label="Novo Atendimento" 
+            to="/novo-atendimento" 
+            active={location.pathname === '/novo-atendimento'} 
+          />
+          <SidebarItem 
+            icon={ClipboardList} 
+            label="Rotina Diária" 
+            to="/rotina" 
+            active={location.pathname === '/rotina'} 
+          />
+          <SidebarItem 
+            icon={FileCheck} 
+            label="Resultados" 
+            to="/resultados" 
+            active={location.pathname === '/resultados'} 
+          />
+          <div className="h-[1px] bg-white/5 my-4 mx-2"></div>
+          <SidebarItem 
             icon={Users} 
             label="Pacientes" 
             to="/pacientes" 
             active={location.pathname === '/pacientes'} 
-          />
-          <SidebarItem 
-            icon={FlaskConical} 
-            label="Exames" 
-            to="/exames" 
-            active={location.pathname === '/exames'} 
           />
           <SidebarItem 
             icon={Settings} 
@@ -89,7 +105,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
             <input 
               type="text" 
               placeholder="Pesquisar no sistema..." 
-              className="bg-transparent border-none outline-none text-sm text-blue-100 placeholder:text-blue-300/30 w-full"
+              className="bg-transparent border-none outline-none text-sm text-white placeholder:text-blue-300/30 w-full"
             />
           </div>
 
@@ -100,7 +116,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
             </button>
             <div className="flex items-center gap-3 pl-6 border-l border-white/5">
               <div className="text-right">
-                <p className="text-xs font-bold text-blue-100">Matheus Souza</p>
+                <p className="text-xs font-bold text-white">Matheus Souza</p>
                 <p className="text-[10px] text-blue-300/40 uppercase tracking-tighter">Administrador</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 border-2 border-white/10 flex items-center justify-center font-bold text-white shadow-lg">
@@ -111,7 +127,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         </header>
 
         {/* Page Content */}
-        <div className="p-8">
+        <div className="p-8 bg-[#030a1c]/50 flex-grow">
           {children}
         </div>
       </main>
