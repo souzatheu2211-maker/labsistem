@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showSuccess } from '@/utils/toast';
+import { cn } from '@/lib/utils';
 
 const Patients = () => {
   const [step, setStep] = useState(1);

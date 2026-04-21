@@ -3,6 +3,7 @@
 import React from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Activity, Users, FlaskConical, Calendar } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const StatCard = ({ icon: Icon, label, value, color }: { icon: any, label: string, value: string, color: string }) => (
   <div className="bg-blue-950/30 border border-white/5 p-6 rounded-[2rem] backdrop-blur-sm hover:border-blue-500/30 transition-all group">
@@ -13,8 +14,6 @@ const StatCard = ({ icon: Icon, label, value, color }: { icon: any, label: strin
     <h3 className="text-3xl font-bold text-blue-50 mt-1">{value}</h3>
   </div>
 );
-
-import { cn } from '@/lib/utils';
 
 const Dashboard = () => {
   return (
