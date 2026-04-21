@@ -27,7 +27,6 @@ import {
   Image
 } from "@react-pdf/renderer";
 
-// Função para formatar data sem erro de fuso horário (UTC para Local)
 const formatSafeDate = (dateStr: string) => {
   if (!dateStr) return "";
   if (dateStr.length === 10) {
@@ -37,7 +36,6 @@ const formatSafeDate = (dateStr: string) => {
   return format(parseISO(dateStr), "dd/MM/yyyy");
 };
 
-// Configuração de Estilos para o PDF (A4) usando Times-Roman
 const styles = StyleSheet.create({
   page: {
     paddingTop: 170,    
@@ -106,36 +104,23 @@ const styles = StyleSheet.create({
   }
 });
 
-/**
- * MOTOR DE FORMATAÇÃO DE LAUDO V2
- * Focado em fidelidade de layout e limpeza absoluta
- */
 const formatFinalReport = (text: string) => {
   if (!text) return [];
-
-  // Unidades comuns para detecção de linhas órfãs
   const units = ['mg/dl', 'U/L', 'g/dL', 'mm/h', 'pg', 'fL', 'mcg/dL', 'ng/mL', 'mUI/L', 'mEq/L', 'mmol/L'];
 
   return text.split('\n').map(line => {
-    // 1. Limpeza de placeholders e lixo visual
     let cleaned = line
-      .replace(/\(\s*[?&]\s*\)/g, '') // Remove (?) e (&)
-      .replace(/_{2,}/g, '')          // Remove ___
-      .replace(/\?{2,}/g, '')         // Remove ???
-      .replace(/\s{2,}/g, ' ')        // Remove espaços duplos
+      .replace(/____/g, '') // Remove o marcador de campo vazio
+      .replace(/\(\s*[?&]\s*\)/g, '') 
+      .replace(/\s{2,}/g, ' ')
       .trim();
     
-    // 2. Detecção de linhas que ficaram apenas com a unidade (lixo visual)
     const hasUnit = units.some(u => cleaned.toLowerCase().includes(u.toLowerCase()));
     const hasValue = /[0-9]/.test(cleaned) || /reagente|positivo|negativo|ausência|presença/i.test(cleaned);
     
-    // Se tem unidade mas não tem valor real, limpamos a linha para evitar "Glicose: mg/dL"
-    if (hasUnit && !hasValue) {
-      cleaned = "";
-    }
-
+    if (hasUnit && !hasValue) cleaned = "";
     return cleaned;
-  }); // NÃO filtramos linhas vazias para manter o espaçamento original
+  });
 };
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
@@ -187,21 +172,9 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
                   {formatFinalReport(se.result_value || "").map((line: string, i: number) => {
-                    // Se a linha for vazia, renderizamos um espaço para manter a altura da quebra de linha
                     if (line === "") return <Text key={i} style={{ height: 11 }}> </Text>;
-
-                    const isRef = line.toLowerCase().includes("referência") || 
-                                  line.toLowerCase().includes("ref:") || 
-                                  line.toLowerCase().includes("valor:") || 
-                                  line.toLowerCase().includes("vr:") ||
-                                  line.toLowerCase().includes("normal:") ||
-                                  line.toLowerCase().includes("desejável:");
-                    
-                    return (
-                      <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
-                        {line}
-                      </Text>
-                    );
+                    const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:") || line.toLowerCase().includes("vr:");
+                    return <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>{line}</Text>;
                   })}
                 </View>
               ))}
@@ -236,7 +209,6 @@ const Reports = () => {
       .select("*")
       .or(`full_name.ilike.%${search}%,cpf.ilike.%${search}%`)
       .limit(5);
-
     setPatients(data || []);
     setLoading(false);
   };
@@ -245,20 +217,12 @@ const Reports = () => {
     setSelectedPatient(patient);
     setPatients([]);
     setSearch("");
-
     const { data } = await supabase
       .from("services")
-      .select(`
-        *,
-        service_exams (
-          *,
-          exams (name)
-        )
-      `)
+      .select(`*, service_exams (*, exams (name))`)
       .eq("patient_id", patient.id)
       .eq("status", "finalizado")
       .order("created_at", { ascending: false });
-
     setServices(data || []);
   };
 
@@ -270,29 +234,24 @@ const Reports = () => {
             <Printer className="w-6 h-6 text-blue-400" />
             Impressão de Laudos
           </h1>
-          <p className="text-blue-300/50 text-sm mt-1 font-medium">Busque pacientes e gere PDFs oficiais dos atendimentos finalizados</p>
+          <p className="text-blue-300/50 text-sm mt-1 font-medium">Busque pacientes e gere PDFs oficiais</p>
         </div>
 
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">
           <div className="relative">
             <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
             <Input
-              placeholder="Buscar por Nome, CPF ou Registro..."
+              placeholder="Buscar por Nome ou CPF..."
               className="bg-blue-900/20 border-blue-500/10 h-12 pl-12 rounded-2xl text-white font-bold"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
             {loading && <Loader2 className="absolute right-4 top-3.5 h-5 w-5 text-blue-400 animate-spin" />}
           </div>
-
           {patients.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-blue-950 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
               {patients.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => handleSelectPatient(p)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-blue-900/40 border-b border-white/5 last:border-none transition-all"
-                >
+                <button key={p.id} onClick={() => handleSelectPatient(p)} className="w-full flex items-center justify-between p-4 hover:bg-blue-900/40 border-b border-white/5 last:border-none transition-all">
                   <div className="text-left">
                     <p className="text-sm font-bold text-white uppercase">{p.full_name}</p>
                     <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">CPF: {p.cpf}</p>
@@ -307,9 +266,7 @@ const Reports = () => {
         {selectedPatient && (
           <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6 flex items-center justify-between animate-in zoom-in duration-500">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                <User className="w-6 h-6" />
-              </div>
+              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white"><User className="w-6 h-6" /></div>
               <div>
                 <p className="text-xs font-black text-blue-400 uppercase tracking-widest">Paciente Selecionado</p>
                 <h3 className="text-lg font-bold text-white uppercase">{selectedPatient.full_name}</h3>
@@ -323,37 +280,21 @@ const Reports = () => {
           {services.map((service) => (
             <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-600/10 rounded-xl text-blue-400">
-                  <Calendar className="w-5 h-5" />
-                </div>
+                <div className="p-3 bg-blue-600/10 rounded-xl text-blue-400"><Calendar className="w-5 h-5" /></div>
                 <div>
                   <h3 className="text-white font-bold uppercase text-sm">Atendimento de {formatSafeDate(service.created_at)}</h3>
                   <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">Registro: #{service.id.slice(0, 8).toUpperCase()}</p>
                 </div>
               </div>
-              
-              <PDFDownloadLink 
-                document={<LabReportPDF service={service} patient={selectedPatient} />} 
-                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${formatSafeDate(service.created_at).replace(/\//g, "")}.pdf`}
-              >
+              <PDFDownloadLink document={<LabReportPDF service={service} patient={selectedPatient} />} fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}.pdf`}>
                 {({ loading: pdfLoading }) => (
-                  <Button 
-                    className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-blue-900/20"
-                    disabled={pdfLoading}
-                  >
+                  <Button className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-blue-900/20" disabled={pdfLoading}>
                     {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar PDF</>}
                   </Button>
                 )}
               </PDFDownloadLink>
             </div>
           ))}
-
-          {services.length === 0 && selectedPatient && (
-            <div className="flex flex-col items-center justify-center py-20 opacity-20">
-              <FileText className="w-16 h-16 mb-4" />
-              <p className="text-lg font-bold uppercase tracking-widest">Nenhum atendimento finalizado</p>
-            </div>
-          )}
         </div>
       </div>
     </DashboardLayout>
