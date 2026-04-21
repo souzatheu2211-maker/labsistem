@@ -1,26 +1,37 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, ArrowRight, ShieldCheck, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from 'react-router-dom';
 import { showSuccess, showError } from '@/utils/toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     
-    // Login Fake
-    if (email === 'adm@lab.com' && password === '1234') {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
       showSuccess('Acesso autorizado! Bem-vindo.');
       navigate('/dashboard');
-    } else {
-      showError('Credenciais inválidas. Tente novamente.');
+    } catch (error: any) {
+      showError(error.message || 'Erro ao realizar login. Verifique suas credenciais.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -44,6 +55,7 @@ const LoginForm = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-blue-900/20 border-blue-500/20 text-white placeholder:text-blue-300/30 h-12 pl-10 rounded-2xl focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                 required
+                disabled={loading}
               />
             </div>
           </div>
@@ -58,16 +70,24 @@ const LoginForm = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 className="bg-blue-900/20 border-blue-500/20 text-white placeholder:text-blue-300/30 h-12 pl-10 rounded-2xl focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                 required
+                disabled={loading}
               />
             </div>
           </div>
 
           <Button 
             type="submit" 
+            disabled={loading}
             className="w-full h-12 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2 group"
           >
-            Entrar no Sistema
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                Entrar no Sistema
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
           </Button>
 
           <div className="flex items-center justify-center gap-2 text-blue-300/40 text-[10px] uppercase tracking-widest pt-2">
