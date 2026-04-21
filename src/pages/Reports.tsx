@@ -109,19 +109,15 @@ const styles = StyleSheet.create({
   }
 });
 
-const LabReportPDF = ({ service, patient, results }: { service: any, patient: any, results: any[] }) => {
+const LabReportPDF = ({ service, patient, results, references }: { service: any, patient: any, results: any[], references: any[] }) => {
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
-
-  const examsWithResults = service.service_exams.map((se: any) => {
-    const examResults = results.filter(r => r.service_exam_id === se.id);
-    return { ...se, results: examResults };
-  }).filter((e: any) => e.results.length > 0);
 
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
         <Image src={timbreUrl} style={styles.background} fixed />
 
+        {/* Cabeçalho do Paciente */}
         <View style={styles.patientInfoFixed} fixed>
           <View style={styles.patientRow}>
             <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
@@ -134,36 +130,46 @@ const LabReportPDF = ({ service, patient, results }: { service: any, patient: an
           </View>
         </View>
 
-        {examsWithResults.map((exam: any) => (
-          <View key={exam.id} wrap={false}>
-            <Text style={styles.examTitle}>{exam.exams?.name}</Text>
-            
-            <View style={styles.tableHeader}>
-              <Text style={[styles.headerText, { width: '40%' }]}>Parâmetro</Text>
-              <Text style={[styles.headerText, { width: '30%' }]}>Resultado</Text>
-              <Text style={[styles.headerText, { width: '30%' }]}>Referência</Text>
-            </View>
+        {/* Listagem de Exames baseada em Referências */}
+        {service.service_exams.map((se: any) => {
+          const examRefs = references.filter(rf => rf.exam_id === se.exam_id);
+          
+          // Só exibe o exame se ele tiver referências configuradas
+          if (examRefs.length === 0) return null;
 
-            {exam.results.map((res: any, idx: number) => {
-              const ref = res.reference;
-              const refValue = patient.gender === 'masculino' ? ref?.male_ref : 
-                               patient.gender === 'feminino' ? ref?.female_ref : 
-                               ref?.general_ref;
+          return (
+            <View key={se.id} wrap={false}>
+              <Text style={styles.examTitle}>{se.exams?.name}</Text>
               
-              return (
-                <View key={idx} style={styles.row}>
-                  <Text style={[styles.cellText, { width: '40%' }]}>{res.parameter_name}</Text>
-                  <Text style={[styles.cellText, { width: '30%', fontFamily: 'Times-Bold' }]}>
-                    {res.value || ''} {ref?.unit || ''}
-                  </Text>
-                  <Text style={[styles.cellText, { width: '30%', fontSize: 9, color: '#444' }]}>
-                    {refValue || ''} {ref?.unit || ''}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        ))}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.headerText, { width: '40%' }]}>Parâmetro</Text>
+                <Text style={[styles.headerText, { width: '30%' }]}>Resultado</Text>
+                <Text style={[styles.headerText, { width: '30%' }]}>Referência</Text>
+              </View>
+
+              {examRefs.map((ref: any, idx: number) => {
+                // Busca o resultado lançado para este parâmetro específico
+                const result = results.find(r => r.service_exam_id === se.id && r.parameter_name === ref.parameter);
+                
+                const refValue = patient.gender === 'masculino' ? ref.male_ref : 
+                                 patient.gender === 'feminino' ? ref.female_ref : 
+                                 ref.general_ref;
+                
+                return (
+                  <View key={idx} style={styles.row}>
+                    <Text style={[styles.cellText, { width: '40%' }]}>{ref.parameter}</Text>
+                    <Text style={[styles.cellText, { width: '30%', fontFamily: 'Times-Bold' }]}>
+                      {result?.value || '---'} {ref.unit || ''}
+                    </Text>
+                    <Text style={[styles.cellText, { width: '30%', fontSize: 9, color: '#444' }]}>
+                      {refValue || ''} {ref.unit || ''}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })}
       </Page>
     </Document>
   );
@@ -176,6 +182,7 @@ const Reports = () => {
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
   const [allResults, setAllResults] = useState<any[]>([]);
+  const [allReferences, setAllReferences] = useState<any[]>([]);
 
   useEffect(() => {
     if (search.length > 2) {
@@ -202,7 +209,6 @@ const Reports = () => {
     setPatients([]);
     setSearch("");
     
-    // Buscar TODOS os atendimentos (removido filtro de status para debug)
     const { data: srvs } = await supabase
       .from("services")
       .select(`*, service_exams (*, exams (id, name))`)
@@ -220,13 +226,8 @@ const Reports = () => {
         supabase.from('reference_values').select('*').in('exam_id', examIds)
       ]);
 
-      const mappedResults = resData.data?.map(r => {
-        const serviceExam = srvs.flatMap(s => s.service_exams).find((se: any) => se.id === r.service_exam_id);
-        const ref = refData.data?.find(rf => rf.exam_id === serviceExam?.exam_id && rf.parameter === r.parameter_name);
-        return { ...r, reference: ref };
-      });
-
-      setAllResults(mappedResults || []);
+      setAllResults(resData.data || []);
+      setAllReferences(refData.data || []);
     }
   };
 
@@ -282,7 +283,9 @@ const Reports = () => {
 
         <div className="grid grid-cols-1 gap-4">
           {services.map((service) => {
-            const hasResults = allResults.some(r => service.service_exams.some((se: any) => se.id === r.service_exam_id));
+            // Verifica se existem referências para os exames deste atendimento
+            const serviceExamIds = service.service_exams.map((se: any) => se.id);
+            const hasResults = allResults.some(r => serviceExamIds.includes(r.service_exam_id));
             
             return (
               <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
@@ -304,7 +307,14 @@ const Reports = () => {
                 
                 {hasResults ? (
                   <PDFDownloadLink 
-                    document={<LabReportPDF service={service} patient={selectedPatient} results={allResults} />} 
+                    document={
+                      <LabReportPDF 
+                        service={service} 
+                        patient={selectedPatient} 
+                        results={allResults} 
+                        references={allReferences} 
+                      />
+                    } 
                     fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}.pdf`}
                   >
                     {({ loading: pdfLoading }) => (
