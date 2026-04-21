@@ -5,10 +5,6 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { 
   UserPlus, 
   Search, 
-  Edit3, 
-  ChevronRight, 
-  ChevronLeft, 
-  CheckCircle2,
   User,
   MapPin,
   FileText,
@@ -73,9 +69,10 @@ const Patients = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.full_name) {
-      showError('O nome completo é obrigatório.');
-      setStep(1);
+    // Validação de campos obrigatórios
+    if (!formData.full_name || !formData.cpf || !formData.birth_date) {
+      showError('Nome, CPF e Data de Nascimento são obrigatórios.');
+      setStep(1); // Volta para o primeiro passo onde estão esses campos
       return;
     }
 
@@ -143,7 +140,7 @@ const Patients = () => {
                 <div key={p.id} className="flex items-center justify-between p-4 bg-blue-900/10 border border-white/5 rounded-xl">
                   <div>
                     <p className="text-sm font-bold text-white uppercase">{p.full_name}</p>
-                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">CPF: {p.cpf || 'Não informado'}</p>
+                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">CPF: {p.cpf}</p>
                   </div>
                   <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 font-bold uppercase text-[10px]">Ver Detalhes</Button>
                 </div>
@@ -174,25 +171,33 @@ const Patients = () => {
             {step === 1 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-right duration-500">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest">Nome Completo</label>
+                  <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest flex items-center gap-1">
+                    Nome Completo <span className="text-red-500">*</span>
+                  </label>
                   <Input 
                     name="full_name"
                     value={formData.full_name}
                     onChange={handleInputChange}
                     className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" 
+                    placeholder="Ex: João Silva"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest">CPF</label>
+                  <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest flex items-center gap-1">
+                    CPF <span className="text-red-500">*</span>
+                  </label>
                   <Input 
                     name="cpf"
                     value={formData.cpf}
                     onChange={handleInputChange}
                     className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold" 
+                    placeholder="000.000.000-00"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest">Data de Nascimento</label>
+                  <label className="text-[10px] font-black text-blue-400 uppercase ml-1 tracking-widest flex items-center gap-1">
+                    Data de Nascimento <span className="text-red-500">*</span>
+                  </label>
                   <Input 
                     type="date" 
                     name="birth_date"
