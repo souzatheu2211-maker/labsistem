@@ -9,7 +9,8 @@ import {
   Download,
   User,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,15 +56,13 @@ const Reports = () => {
 
     const { data } = await supabase
       .from("services")
-      .select(
-        `
+      .select(`
         *,
         service_exams (
           *,
           exams (name)
         )
-      `
-      )
+      `)
       .eq("patient_id", patient.id)
       .eq("status", "finalizado")
       .order("created_at", { ascending: false });
@@ -71,61 +70,66 @@ const Reports = () => {
     setServices(data || []);
   };
 
+  // Função para ordenar exames logicamente (ex: Colesterol Total antes de Frações)
+  const sortExams = (exams: any[]) => {
+    const order = ["HEMOGRAMA", "GLICOSE", "COLESTEROL TOTAL", "COLESTEROL HDL", "COLESTEROL LDL", "TRIGLICERIDEOS", "UREIA", "CREATININA"];
+    return [...exams].sort((a, b) => {
+      const nameA = a.exams?.name.toUpperCase() || "";
+      const nameB = b.exams?.name.toUpperCase() || "";
+      
+      const indexA = order.findIndex(item => nameA.includes(item));
+      const indexB = order.findIndex(item => nameB.includes(item));
+      
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      return nameA.localeCompare(nameB);
+    });
+  };
+
   const generatePDF = async (service: any) => {
     setGenerating(true);
-
     try {
-      const element = document.getElementById(
-        `report-content-${service.id}`
-      );
+      const reportElement = document.getElementById(`report-container-${service.id}`);
+      if (!reportElement) throw new Error("Elemento não encontrado");
 
-      if (!element) throw new Error("Laudo não encontrado");
+      // Aguarda carregamento de imagens
+      await new Promise(r => setTimeout(r, 800));
 
-      // Aguarda um pouco para garantir que as imagens (timbre/logo) carreguem
-      await new Promise((r) => setTimeout(r, 500));
-
-      const canvas = await html2canvas(element, {
+      const canvas = await html2canvas(reportElement, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: "#ffffff",
-        windowWidth: 794 // Largura aproximada de um A4 em pixels (96dpi)
+        windowWidth: 794 // A4 width at 96dpi
       });
 
       const imgData = canvas.toDataURL("image/png");
-
-      // Criar PDF A4
       const pdf = new jsPDF("p", "mm", "a4");
-
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-
+      
       const imgProps = pdf.getImageProperties(imgData);
       const pdfImgHeight = (imgProps.height * pageWidth) / imgProps.width;
 
       let heightLeft = pdfImgHeight;
       let position = 0;
 
-      // Adiciona a primeira página
       pdf.addImage(imgData, "PNG", 0, position, pageWidth, pdfImgHeight);
       heightLeft -= pageHeight;
 
-      // Adiciona páginas extras se necessário
       while (heightLeft > 0) {
-        position -= pageHeight;
+        position = position - pageHeight;
         pdf.addPage();
         pdf.addImage(imgData, "PNG", 0, position, pageWidth, pdfImgHeight);
         heightLeft -= pageHeight;
       }
 
-      pdf.save(
-        `Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}.pdf`
-      );
-
+      pdf.save(`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${format(new Date(service.created_at), "ddMMyy")}.pdf`);
       showSuccess("Laudo gerado com sucesso!");
     } catch (err) {
       console.error(err);
-      showError("Erro ao gerar PDF. Verifique se o timbre carregou corretamente.");
+      showError("Erro ao gerar PDF.");
     } finally {
       setGenerating(false);
     }
@@ -134,17 +138,12 @@ const Reports = () => {
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-700">
-        {/* HEADER */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
-              <Printer className="w-6 h-6 text-blue-400" />
-              Impressão de Laudos
-            </h1>
-            <p className="text-blue-300/50 text-sm mt-1 font-medium">
-              Gere PDFs profissionais com timbre e formatação oficial
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
+            <Printer className="w-6 h-6 text-blue-400" />
+            Impressão de Laudos
+          </h1>
+          <p className="text-blue-300/50 text-sm mt-1 font-medium">Selecione o atendimento para gerar o documento oficial</p>
         </div>
 
         {/* BUSCA */}
@@ -157,9 +156,7 @@ const Reports = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            {loading && (
-              <Loader2 className="absolute right-4 top-3.5 h-5 w-5 text-blue-400 animate-spin" />
-            )}
+            {loading && <Loader2 className="absolute right-4 top-3.5 h-5 w-5 text-blue-400 animate-spin" />}
           </div>
 
           {patients.length > 0 && (
@@ -171,12 +168,8 @@ const Reports = () => {
                   className="w-full flex items-center justify-between p-4 hover:bg-blue-900/40 border-b border-white/5 last:border-none transition-all"
                 >
                   <div className="text-left">
-                    <p className="text-sm font-bold text-white uppercase">
-                      {p.full_name}
-                    </p>
-                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">
-                      CPF: {p.cpf}
-                    </p>
+                    <p className="text-sm font-bold text-white uppercase">{p.full_name}</p>
+                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">CPF: {p.cpf}</p>
                   </div>
                   <CheckCircle2 className="w-5 h-5 text-blue-500" />
                 </button>
@@ -185,7 +178,6 @@ const Reports = () => {
           )}
         </div>
 
-        {/* PACIENTE SELECIONADO */}
         {selectedPatient && (
           <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6 flex items-center justify-between animate-in zoom-in duration-500">
             <div className="flex items-center gap-4">
@@ -193,186 +185,102 @@ const Reports = () => {
                 <User className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-xs font-black text-blue-400 uppercase tracking-widest">
-                  Paciente Selecionado
-                </p>
-                <h3 className="text-lg font-bold text-white uppercase">
-                  {selectedPatient.full_name}
-                </h3>
+                <p className="text-xs font-black text-blue-400 uppercase tracking-widest">Paciente Selecionado</p>
+                <h3 className="text-lg font-bold text-white uppercase">{selectedPatient.full_name}</h3>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              onClick={() => setSelectedPatient(null)}
-              className="text-red-400 hover:bg-red-500/10 font-bold uppercase text-[10px]"
-            >
-              Trocar
-            </Button>
+            <Button variant="ghost" onClick={() => setSelectedPatient(null)} className="text-red-400 hover:bg-red-500/10 font-bold uppercase text-[10px]">Trocar</Button>
           </div>
         )}
 
-        {/* LISTA DE ATENDIMENTOS */}
-        <div className="space-y-6">
+        {/* LISTA DE ATENDIMENTOS (CLEAN) */}
+        <div className="grid grid-cols-1 gap-4">
           {services.map((service) => (
-            <div
-              key={service.id}
-              className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm group hover:border-blue-500/30 transition-all"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-white font-bold uppercase tracking-tight">
-                    Atendimento #{service.id.slice(0, 8)}
-                  </h3>
-                  <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">
-                    Finalizado em{" "}
-                    {format(new Date(service.created_at), "dd/MM/yyyy HH:mm")}
-                  </p>
+            <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-600/10 rounded-xl text-blue-400">
+                  <Calendar className="w-5 h-5" />
                 </div>
-
-                <Button
-                  onClick={() => generatePDF(service)}
-                  disabled={generating}
-                  className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-6"
-                >
-                  {generating ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4" /> Gerar PDF Oficial
-                    </>
-                  )}
-                </Button>
+                <div>
+                  <h3 className="text-white font-bold uppercase text-sm">Atendimento de {format(new Date(service.created_at), "dd/MM/yyyy")}</h3>
+                  <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">Registro: #{service.id.slice(0, 8).toUpperCase()}</p>
+                </div>
               </div>
+              
+              <Button 
+                onClick={() => generatePDF(service)}
+                disabled={generating}
+                className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-6"
+              >
+                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Gerar PDF</>}
+              </Button>
 
-              {/* CONTEÚDO DO LAUDO (FORA DA TELA PARA O HTML2CANVAS) */}
+              {/* ESTRUTURA DO LAUDO (FORA DA TELA) */}
               <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
-                <div
-                  id={`report-content-${service.id}`}
-                  style={{
-                    width: "210mm",
-                    minHeight: "297mm",
-                    background: "#ffffff",
-                    color: "#000000",
-                    fontFamily: '"Times New Roman", Times, serif',
-                    fontSize: "12pt",
-                    position: "relative",
-                    padding: "20mm",
-                    boxSizing: "border-box"
-                  }}
-                >
-                  {/* TIMBRE (CABEÇALHO E RODAPÉ) */}
-                  <img
-                    src="/src/assets/timbre.png"
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      height: "42mm", // Ajuste conforme o tamanho real do cabeçalho do seu timbre
-                      objectFit: "cover"
-                    }}
-                  />
-                  
-                  {/* LOGO NO CANTO SUPERIOR DIREITO */}
-                  <img 
-                    src="/src/assets/logo.png" 
-                    style={{
-                      position: "absolute",
-                      top: "10mm",
-                      right: "10mm",
-                      width: "35mm",
-                      height: "auto",
-                      filter: "grayscale(100%) brightness(0)"
-                    }}
-                  />
+                <div id={`report-container-${service.id}`} style={{ width: "210mm", background: "#ffffff", color: "#000000" }}>
+                  {/* Simulamos as páginas para o html2canvas capturar tudo de uma vez */}
+                  {/* O jsPDF cuidará de quebrar as páginas a cada 297mm */}
+                  <div style={{ padding: "0", position: "relative" }}>
+                    
+                    {/* Renderizamos o conteúdo de forma contínua, mas com o cabeçalho repetindo a cada 'página' visual */}
+                    {/* Para simplificar e garantir precisão, vamos usar um layout que o html2canvas entenda bem */}
+                    <div style={{ width: "100%", position: "relative" }}>
+                      
+                      {/* Cabeçalho e Timbre (Fixo no topo da primeira página, mas vamos repetir logicamente se necessário) */}
+                      {/* Como o html2canvas captura o elemento inteiro, vamos organizar os exames e garantir que o cabeçalho do paciente esteja no topo */}
+                      
+                      <div style={{ padding: "20mm", paddingTop: "0" }}>
+                        {/* Timbre */}
+                        <img src="/src/assets/timbre.png" style={{ width: "100%", height: "42mm", objectFit: "cover", marginBottom: "0" }} />
+                        
+                        {/* Logo Canto Superior Direito */}
+                        <img src="/src/assets/logo.png" style={{ position: "absolute", top: "10mm", right: "10mm", width: "35mm", filter: "grayscale(100%) brightness(0)" }} />
 
-                  {/* CABEÇALHO DO PACIENTE (CLEAN) */}
-                  <div
-                    style={{
-                      marginTop: "42mm", // Começa após o cabeçalho do timbre
-                      borderBottom: "1px solid black",
-                      paddingBottom: "4mm",
-                      marginBottom: "8mm",
-                      fontSize: "12pt",
-                      lineHeight: "1.4"
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <div style={{ flex: 1 }}>
-                        <strong>NOME:</strong> {selectedPatient.full_name.toUpperCase()}
-                      </div>
-                      <div style={{ width: "60mm" }}>
-                        <strong>REGISTRO:</strong> #{service.id.slice(0, 8).toUpperCase()}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2mm" }}>
-                      <div style={{ flex: 1 }}>
-                        <strong>CPF:</strong> {selectedPatient.cpf}
-                      </div>
-                      <div style={{ width: "40mm" }}>
-                        <strong>DN:</strong> {format(new Date(selectedPatient.birth_date), "dd/MM/yyyy")}
-                      </div>
-                      <div style={{ width: "20mm" }}>
-                        <strong>IDADE:</strong> {differenceInYears(new Date(), new Date(selectedPatient.birth_date))} ANOS
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* EXAMES ORDENADOS POR NOME (OU SETOR SE TIVERMOS ESSA INFO) */}
-                  <div style={{ marginTop: "8mm" }}>
-                    {[...service.service_exams]
-                      .sort((a, b) => (a.exams?.name || "").localeCompare(b.exams?.name || ""))
-                      .map((se: any) => (
-                        <div
-                          key={se.id}
-                          style={{
-                            marginBottom: "10mm",
-                            pageBreakInside: "avoid"
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: "14pt",
-                              fontWeight: "bold",
-                              borderBottom: "1px solid #eeeeee",
-                              marginBottom: "4mm",
-                              paddingBottom: "1mm",
-                              textTransform: "uppercase"
-                            }}
-                          >
-                            {se.exams?.name}
+                        {/* Cabeçalho do Paciente (Justinho) */}
+                        <div style={{ 
+                          borderBottom: "1px solid black", 
+                          padding: "2mm 0", 
+                          marginBottom: "6mm", 
+                          fontFamily: '"Times New Roman", serif', 
+                          fontSize: "12pt",
+                          lineHeight: "1.2"
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <div style={{ flex: 1 }}><strong>NOME:</strong> {selectedPatient.full_name.toUpperCase()}</div>
+                            <div style={{ width: "60mm" }}><strong>REGISTRO:</strong> #{service.id.slice(0, 8).toUpperCase()}</div>
                           </div>
-
-                          <div
-                            style={{
-                              fontSize: "12pt",
-                              whiteSpace: "pre-wrap",
-                              lineHeight: "1.5",
-                              color: "#333333"
-                            }}
-                          >
-                            {/* O conteúdo do laudo já vem com os valores substituídos */}
-                            {se.result_value}
+                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1mm" }}>
+                            <div style={{ flex: 1 }}><strong>CPF:</strong> {selectedPatient.cpf}</div>
+                            <div style={{ width: "40mm" }}><strong>DN:</strong> {format(new Date(selectedPatient.birth_date), "dd/MM/yyyy")}</div>
+                            <div style={{ width: "20mm" }}><strong>IDADE:</strong> {differenceInYears(new Date(), new Date(selectedPatient.birth_date))} ANOS</div>
                           </div>
                         </div>
-                      ))}
+
+                        {/* Exames */}
+                        <div style={{ fontFamily: '"Times New Roman", serif' }}>
+                          {sortExams(service.service_exams).map((se: any) => (
+                            <div key={se.id} style={{ marginBottom: "8mm", pageBreakInside: "avoid" }}>
+                              <div style={{ fontSize: "14pt", fontWeight: "bold", marginBottom: "3mm", textTransform: "uppercase", borderBottom: "0.5px solid #eee" }}>
+                                {se.exams?.name}
+                              </div>
+                              <div style={{ fontSize: "12pt", whiteSpace: "pre-wrap", lineHeight: "1.4" }}>
+                                {se.result_value?.split('\n').map((line: string, i: number) => {
+                                  // Lógica para diminuir fonte de valores de referência
+                                  const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:");
+                                  return (
+                                    <div key={i} style={{ fontSize: isRef ? "8.5pt" : "12pt", color: isRef ? "#444" : "#000" }}>
+                                      {line}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              {/* RESUMO DOS EXAMES NA TELA */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {service.service_exams.map((se: any) => (
-                  <div
-                    key={se.id}
-                    className="flex items-center gap-3 bg-blue-900/20 p-4 rounded-2xl border border-white/5"
-                  >
-                    <FileText className="w-5 h-5 text-blue-400" />
-                    <span className="text-[10px] font-black text-white uppercase tracking-tight">
-                      {se.exams?.name}
-                    </span>
-                  </div>
-                ))}
               </div>
             </div>
           ))}
@@ -380,9 +288,7 @@ const Reports = () => {
           {services.length === 0 && selectedPatient && (
             <div className="flex flex-col items-center justify-center py-20 opacity-20">
               <FileText className="w-16 h-16 mb-4" />
-              <p className="text-lg font-bold uppercase tracking-widest">
-                Nenhum laudo finalizado para este paciente
-              </p>
+              <p className="text-lg font-bold uppercase tracking-widest">Nenhum laudo finalizado</p>
             </div>
           )}
         </div>
