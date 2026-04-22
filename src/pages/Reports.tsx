@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: "absolute",
-    top: 140, // SUBIU MAIS UM POUCO (SEM ENCOSTAR NA LINHA DO TIMBRE)
+    top: 140,
     left: 50,
     right: 50,
     borderBottom: 1,
@@ -90,11 +90,11 @@ const styles = StyleSheet.create({
     marginBottom: 1
   },
   leftCol: {
-    width: "62%", // MAIS PERTO (ANTES 60%)
+    width: "62%",
     paddingRight: 6
   },
   rightCol: {
-    width: "38%", // MAIS PERTO (ANTES 40%)
+    width: "38%",
     paddingLeft: 4
   },
 
@@ -163,8 +163,21 @@ const renderHTMLContent = (html: string) => {
       trimmedLine.toUpperCase().includes("MUITO ALTO") ||
       trimmedLine.toUpperCase().includes("MUITO ELEVADO") ||
       trimmedLine.toUpperCase().includes("INDETERMINADO") ||
+
+      // MÉTODOS (ficam pequenos igual referência)
       trimmedLine.toUpperCase().includes("MÉTODO") ||
-      trimmedLine.toUpperCase().includes("MET.");
+      trimmedLine.toUpperCase().includes("MET.") ||
+      trimmedLine.toUpperCase().includes("LABTEST") ||
+      trimmedLine.toUpperCase().includes("DIAGNÓSTICA") ||
+      trimmedLine.toUpperCase().includes("IMUNO") ||
+      trimmedLine.toUpperCase().includes("IFCC") ||
+      trimmedLine.toUpperCase().includes("WINTROBE") ||
+      trimmedLine.toUpperCase().includes("SZASZ") ||
+      trimmedLine.toUpperCase().includes("FOTOMETRIA") ||
+      trimmedLine.toUpperCase().includes("CINÉTICO") ||
+      trimmedLine.toUpperCase().includes("CINETICO") ||
+      trimmedLine.toUpperCase().includes("ENZIMÁTICO") ||
+      trimmedLine.toUpperCase().includes("ENZIMATICO");
 
     const isMainResultLine =
       trimmedLine.includes(":") &&
