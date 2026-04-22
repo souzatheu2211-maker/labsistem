@@ -8,7 +8,6 @@ import {
   PlusCircle, 
   ClipboardList, 
   FileCheck, 
-  Settings, 
   LogOut,
   Search,
   ChevronLeft,
@@ -78,8 +77,6 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           <SidebarItem icon={ClipboardList} label="Rotina Diária" to="/rotina" active={location.pathname === '/rotina'} collapsed={isCollapsed} />
           <SidebarItem icon={FileCheck} label="Resultados" to="/resultados" active={location.pathname === '/resultados'} collapsed={isCollapsed} />
           <SidebarItem icon={Printer} label="Impressão" to="/impressao" active={location.pathname === '/impressao'} collapsed={isCollapsed} />
-          <div className={cn("h-[1px] bg-white/5 my-4 mx-2", isCollapsed && "mx-0")}></div>
-          <SidebarItem icon={Settings} label="Configurações" to="/config" active={location.pathname.startsWith('/config')} collapsed={isCollapsed} />
         </nav>
 
         <div className={cn("pt-6 border-t border-white/5", isCollapsed && "px-0")}>
