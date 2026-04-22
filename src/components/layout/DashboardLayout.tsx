@@ -49,7 +49,6 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="min-h-screen bg-[#020817] flex text-blue-50">
-      {/* Sidebar */}
       <aside className={cn(
         "border-r border-white/5 bg-blue-950/20 backdrop-blur-xl flex flex-col fixed h-full z-20 transition-all duration-500 ease-in-out",
         isCollapsed ? "w-20 p-4" : "w-64 p-6"
@@ -58,7 +57,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           {!isCollapsed && (
             <div className="relative inline-block">
               <div className="absolute -inset-6 bg-blue-500/20 rounded-full blur-2xl animate-pulse"></div>
-              <img src="/logo.png" alt="Logo" className="relative w-32 h-auto" />
+              <h2 className="relative text-xl font-black text-blue-400 tracking-tighter">LAB ACAJUTIBA</h2>
             </div>
           )}
           <Button 
@@ -93,7 +92,6 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className={cn(
         "flex-grow flex flex-col transition-all duration-500 ease-in-out",
         isCollapsed ? "ml-20" : "ml-64"

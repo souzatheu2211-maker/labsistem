@@ -12,7 +12,8 @@ import {
   FlaskConical,
   Type,
   RotateCcw,
-  ArrowLeft
+  ArrowLeft,
+  RefreshCw
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,6 @@ const Results = () => {
   const [selectedService, setSelectedService] = useState<any>(null);
   const [selectedExam, setSelectedExam] = useState<any>(null);
   
-  // Estados do Editor
   const [template, setTemplate] = useState('');
   const [parameters, setParameters] = useState<string[]>([]);
   const [manualText, setManualText] = useState('');
@@ -41,27 +41,33 @@ const Results = () => {
 
   const fetchPendingServices = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('services')
-      .select(`
-        *,
-        patients (full_name, cpf),
-        service_exams (
-          id,
-          status,
-          result_value,
-          exam_id,
-          exams (name)
-        )
-      `)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select(`
+          *,
+          patients (full_name, cpf),
+          service_exams (
+            id,
+            status,
+            result_value,
+            exam_id,
+            exams (name)
+          )
+        `)
+        .order('created_at', { ascending: false });
 
-    if (!error) setServices(data || []);
-    setLoading(false);
+      if (error) throw error;
+      setServices(data || []);
+    } catch (error: any) {
+      showError('Erro ao carregar fila: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Extrai os rótulos próximos aos (?) para ajudar no preenchimento
   const getParamLabels = (text: string) => {
+    if (!text) return [];
     const parts = text.split('(?)');
     return parts.slice(0, -1).map(part => {
       const lines = part.trim().split('\n');
@@ -75,25 +81,30 @@ const Results = () => {
     setSelectedExam(se);
     setIsManualMode(!!se.result_value);
     
-    const { data: preReport } = await supabase
-      .from('pre_reports')
-      .select('content')
-      .eq('exam_id', se.exam_id)
-      .maybeSingle();
+    try {
+      const { data: preReport, error } = await supabase
+        .from('pre_reports')
+        .select('content')
+        .eq('exam_id', se.exam_id)
+        .maybeSingle();
 
-    const baseTemplate = preReport?.content || '';
-    setTemplate(baseTemplate);
+      if (error) throw error;
 
-    if (se.result_value) {
-      setManualText(se.result_value);
-    } else {
-      setManualText(baseTemplate);
-      const count = (baseTemplate.match(/\(\?\)/g) || []).length;
-      setParameters(new Array(count).fill(''));
+      const baseTemplate = preReport?.content || 'Nenhum modelo de laudo cadastrado para este exame.';
+      setTemplate(baseTemplate);
+
+      if (se.result_value) {
+        setManualText(se.result_value);
+      } else {
+        setManualText(baseTemplate);
+        const count = (baseTemplate.match(/\(\?\)/g) || []).length;
+        setParameters(new Array(count).fill(''));
+      }
+    } catch (error: any) {
+      showError('Erro ao carregar modelo: ' + error.message);
     }
   };
 
-  // Monta o laudo final em tempo real
   const finalReport = useMemo(() => {
     if (isManualMode) return manualText;
     
@@ -118,7 +129,8 @@ const Results = () => {
         .from('service_exams')
         .update({ 
           result_value: finalReport,
-          status: 'finalizado'
+          status: 'finalizado',
+          updated_at: new Date().toISOString()
         })
         .eq('id', selectedExam.id);
 
@@ -126,7 +138,6 @@ const Results = () => {
 
       showSuccess('Resultado salvo com sucesso!');
       
-      // Atualiza estado local
       const updatedExams = selectedService.service_exams.map((se: any) => 
         se.id === selectedExam.id ? { ...se, status: 'finalizado', result_value: finalReport } : se
       );
@@ -140,15 +151,15 @@ const Results = () => {
       setSelectedExam(null);
       fetchPendingServices();
     } catch (error: any) {
-      showError(error.message);
+      showError('Erro ao salvar: ' + error.message);
     } finally {
       setSubmitting(false);
     }
   };
 
   const filteredServices = services.filter(s => 
-    s.patients?.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    s.patients?.cpf.includes(search)
+    s.patients?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+    s.patients?.cpf?.includes(search)
   );
 
   const paramLabels = useMemo(() => getParamLabels(template), [template]);
@@ -164,15 +175,24 @@ const Results = () => {
             </h1>
             <p className="text-blue-300/50 text-sm mt-1 font-medium">Preencha os valores e visualize o laudo em tempo real</p>
           </div>
-          {selectedService && (
+          <div className="flex items-center gap-3">
             <Button 
               variant="ghost" 
-              onClick={() => { setSelectedService(null); setSelectedExam(null); }} 
-              className="text-blue-400 hover:bg-blue-500/10 font-bold uppercase text-[10px] gap-2"
+              onClick={fetchPendingServices}
+              className="text-blue-400 hover:bg-blue-500/10 rounded-xl h-10 w-10 p-0"
             >
-              <ArrowLeft className="w-4 h-4" /> Voltar para a Fila
+              <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
             </Button>
-          )}
+            {selectedService && (
+              <Button 
+                variant="ghost" 
+                onClick={() => { setSelectedService(null); setSelectedExam(null); }} 
+                className="text-blue-400 hover:bg-blue-500/10 font-bold uppercase text-[10px] gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" /> Voltar para a Fila
+              </Button>
+            )}
+          </div>
         </div>
 
         {!selectedService ? (
@@ -237,7 +257,6 @@ const Results = () => {
           </>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in zoom-in duration-500">
-            {/* Sidebar de Exames */}
             <div className="lg:col-span-3 space-y-4">
               <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6">
                 <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">Paciente</p>
@@ -266,12 +285,9 @@ const Results = () => {
               </div>
             </div>
 
-            {/* Editor e Preview */}
             <div className="lg:col-span-9">
               {selectedExam ? (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  
-                  {/* Caixinha de Resultados (Inputs) */}
                   <div className="space-y-4">
                     <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] p-8 shadow-xl">
                       <div className="flex items-center justify-between mb-8">
@@ -323,7 +339,6 @@ const Results = () => {
                     </div>
                   </div>
 
-                  {/* Quadro do Laudo (Preview) */}
                   <div className="space-y-4">
                     <div className="bg-blue-950/60 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col h-full">
                       <div className="bg-blue-900/30 border-b border-white/5 p-6 flex items-center justify-between">
@@ -354,7 +369,6 @@ const Results = () => {
                       </div>
                     </div>
                   </div>
-
                 </div>
               ) : (
                 <div className="h-[600px] flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-white/5 rounded-[2.5rem]">
