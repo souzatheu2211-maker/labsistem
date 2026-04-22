@@ -64,24 +64,24 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   label: {
-    fontSize: 10, 
+    fontSize: 11, 
   },
   value: {
-    fontSize: 10, 
+    fontSize: 11, 
     fontFamily: 'Helvetica',
   },
   examBlock: {
     marginBottom: 25, 
   },
   examName: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: 'Helvetica-Bold',
     textAlign: 'center',
     marginBottom: 12,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: 'Courier', 
     lineHeight: 1.2,
     color: '#000000',
