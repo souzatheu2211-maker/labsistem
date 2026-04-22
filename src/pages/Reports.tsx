@@ -97,6 +97,7 @@ const styles = StyleSheet.create({
     color: "#000000"
   },
 
+  // 🔥 IGUAL AO WORD
   pageTitle: {
     fontSize: 14,
     fontFamily: "Times-Bold",
@@ -128,16 +129,27 @@ const styles = StyleSheet.create({
     paddingLeft: 4
   },
 
+  rinTable: {
+    flexDirection: "row",
+    marginTop: 2,
+    marginBottom: 2
+  },
+  rinCol: {
+    width: "25%",
+    paddingRight: 4
+  },
+
+  // 🔥 IGUAL AO WORD
   resultText: {
     fontSize: 12,
     fontFamily: "Times-Bold"
   },
   normalText: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: "Times-Roman"
   },
   refText: {
-    fontSize: 7,
+    fontSize: 8,
     color: "#333333",
     fontFamily: "Times-Roman",
     lineHeight: 1.05
@@ -234,6 +246,47 @@ const renderHTMLContent = (html: string) => {
     const hasTab = trimmedLine.includes("\t");
     const hasMultiSpaceColumns = /\s{5,}/.test(trimmedLine);
 
+    // FORMATAÇÃO ESPECIAL DO RIN (COAGULOGRAMA)
+    if (upper.startsWith("RIN: 0,8") || upper.includes("= PROFILAXIA DE TVP")) {
+      const cols = trimmedLine.split(/\s{5,}/);
+
+      return (
+        <View key={i} style={styles.rinTable}>
+          {cols.slice(0, 4).map((col, idx) => (
+            <View key={idx} style={styles.rinCol}>
+              <Text style={styles.refText}>{cleanGarbage(col)}</Text>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    if (
+      upper.startsWith("DESEJÁVEL") ||
+      upper.startsWith("DESEJAVEL") ||
+      upper.includes("CIRURGIA DE ALTO RISCO") ||
+      upper.includes("EMBOLIA PULMONAR") ||
+      upper.includes("INFARTO DO MIOCÁRDIO") ||
+      upper.includes("INFARTO DO MIOCARDIO") ||
+      upper.includes("ATAQUE ISQUÊMICO") ||
+      upper.includes("ATAQUE ISQUEMICO") ||
+      upper.includes("ENXERTOS") ||
+      upper.includes("VÁLVULAS") ||
+      upper.includes("VALVULAS")
+    ) {
+      const cols = trimmedLine.split(/\s{5,}/);
+
+      return (
+        <View key={i} style={styles.rinTable}>
+          {cols.slice(0, 4).map((col, idx) => (
+            <View key={idx} style={styles.rinCol}>
+              <Text style={styles.refText}>{cleanGarbage(col)}</Text>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
     if (isMainResultLine) {
       const [left, ...rest] = trimmedLine.split(":");
       const right = rest.join(":").trim();
@@ -297,7 +350,7 @@ const renderHTMLContent = (html: string) => {
 };
 
 const getExamGroup = (examName: string) => {
-  const n = (examName || "").toUpperCase();
+  const n = (examName || "").trim().toUpperCase();
 
   if (n.includes("HEMOGRAMA")) return "HEMOGRAMA";
   if (n.includes("COAGULOGRAMA")) return "COAGULOGRAMA";
