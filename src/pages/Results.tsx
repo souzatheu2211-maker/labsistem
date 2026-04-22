@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { 
   Search, 
@@ -12,7 +12,9 @@ import {
   Loader2,
   RefreshCw,
   ChevronRight,
-  Edit3
+  Edit3,
+  AlertCircle,
+  History
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,16 +30,14 @@ const Results = () => {
   const [selectedService, setSelectedService] = useState<any>(null);
   const [selectedExam, setSelectedExam] = useState<any>(null);
   
-  // Estados do Editor
+  // Estados do Editor de Laudo
   const [template, setTemplate] = useState('');
   const [values, setValues] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualContent, setManualContent] = useState('');
 
-  useEffect(() => {
-    fetchServices();
-  }, []);
-
-  const fetchServices = async () => {
+  const fetchServices = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -57,56 +57,71 @@ const Results = () => {
 
       if (error) throw error;
       setServices(data || []);
+      
+      // Se houver um serviço selecionado, atualiza ele também
+      if (selectedService) {
+        const updated = data?.find(s => s.id === selectedService.id);
+        if (updated) setSelectedService(updated);
+      }
     } catch (err: any) {
-      showError('Erro ao carregar dados: ' + err.message);
+      showError('Erro ao sincronizar: ' + err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedService]);
 
-  // Função para identificar os nomes dos campos antes dos (?)
-  const getFieldLabels = (text: string) => {
-    if (!text) return [];
-    const parts = text.split('(?)');
-    return parts.slice(0, -1).map(part => {
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  // Extração de labels mais inteligente
+  const fieldLabels = useMemo(() => {
+    if (!template) return [];
+    return template.split('(?)').slice(0, -1).map(part => {
       const lines = part.trim().split('\n');
       const lastLine = lines[lines.length - 1].trim();
-      return lastLine.replace(/[:._]/g, '').trim() || "Campo";
+      // Remove caracteres de formatação comuns em laudos
+      return lastLine.replace(/[:._\-\*]/g, '').trim() || "Parâmetro";
     });
-  };
+  }, [template]);
 
   const handleSelectExam = async (se: any) => {
     setSelectedExam(se);
+    setManualMode(false);
     
-    // Busca o modelo de laudo (pre_report) para este exame
-    const { data: preReport } = await supabase
-      .from('pre_reports')
-      .select('content')
-      .eq('exam_id', se.exam_id)
-      .maybeSingle();
+    try {
+      // 1. Busca o modelo base
+      const { data: preReport } = await supabase
+        .from('pre_reports')
+        .select('content')
+        .eq('exam_id', se.exam_id)
+        .maybeSingle();
 
-    const content = preReport?.content || "Modelo não encontrado para este exame.";
-    setTemplate(content);
+      const baseContent = preReport?.content || "Modelo não configurado.";
+      setTemplate(baseContent);
 
-    // Se já tiver resultado, tenta extrair ou limpa
-    const placeholderCount = (content.match(/\(\?\)/g) || []).length;
-    setValues(new Array(placeholderCount).fill(''));
+      // 2. Se já existe um resultado salvo, entramos em modo manual para não perder dados
+      if (se.result_value && se.result_value !== baseContent) {
+        setManualContent(se.result_value);
+        setManualMode(true);
+      } else {
+        // 3. Caso contrário, prepara os campos dinâmicos
+        const placeholderCount = (baseContent.match(/\(\?\)/g) || []).length;
+        setValues(new Array(placeholderCount).fill(''));
+      }
+    } catch (err: any) {
+      showError('Erro ao carregar modelo: ' + err.message);
+    }
   };
 
-  // Gera o laudo final substituindo os (?) pelos valores digitados
   const previewContent = useMemo(() => {
+    if (manualMode) return manualContent;
     let result = template;
     values.forEach(val => {
       result = result.replace('(?)', val || '______');
     });
     return result;
-  }, [template, values]);
-
-  const handleValueChange = (index: number, val: string) => {
-    const newValues = [...values];
-    newValues[index] = val;
-    setValues(newValues);
-  };
+  }, [template, values, manualMode, manualContent]);
 
   const handleSave = async () => {
     if (!selectedExam) return;
@@ -123,21 +138,21 @@ const Results = () => {
 
       if (error) throw error;
 
-      showSuccess('Resultado salvo com sucesso!');
+      showSuccess('Resultado processado!');
       
-      // Atualiza status do atendimento se todos exames estiverem prontos
-      const updatedExams = selectedService.service_exams.map((se: any) => 
+      // Verifica se todos os exames do atendimento foram concluídos
+      const currentExams = selectedService.service_exams.map((se: any) => 
         se.id === selectedExam.id ? { ...se, status: 'finalizado' } : se
       );
       
-      if (updatedExams.every((se: any) => se.status === 'finalizado')) {
+      if (currentExams.every((se: any) => se.status === 'finalizado')) {
         await supabase.from('services').update({ status: 'finalizado' }).eq('id', selectedService.id);
       }
 
       setSelectedExam(null);
-      fetchServices();
+      await fetchServices();
     } catch (err: any) {
-      showError('Erro ao salvar: ' + err.message);
+      showError('Falha ao salvar: ' + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -148,84 +163,89 @@ const Results = () => {
     s.patients?.cpf.includes(search)
   );
 
-  const fieldLabels = useMemo(() => getFieldLabels(template), [template]);
-
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
+      <div className="max-w-[1600px] mx-auto space-y-6 animate-in fade-in duration-500">
         
-        {/* Cabeçalho Dinâmico */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
-              <FlaskConical className="w-6 h-6 text-blue-400" />
-              Central de Resultados
-            </h1>
-            <p className="text-blue-300/50 text-sm mt-1 font-medium">
-              {selectedService ? `Atendimento: ${selectedService.patients?.full_name}` : 'Gerencie e lance os resultados dos exames'}
-            </p>
+        {/* Header Minimalista */}
+        <div className="flex items-center justify-between bg-blue-950/20 p-6 rounded-[2rem] border border-white/5">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-600/20 rounded-2xl text-blue-400">
+              <FlaskConical className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-white uppercase tracking-tight">Estação de Resultados</h1>
+              <p className="text-blue-300/40 text-[10px] font-bold uppercase tracking-widest">
+                {selectedService ? `Editando: ${selectedService.patients?.full_name}` : 'Fila de processamento laboratorial'}
+              </p>
+            </div>
           </div>
+          
           <div className="flex items-center gap-3">
-            <Button variant="ghost" onClick={fetchServices} className="text-blue-400 hover:bg-blue-500/10 rounded-xl">
-              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            <Button variant="ghost" onClick={fetchServices} className="text-blue-400 hover:bg-blue-500/10 rounded-xl h-12 w-12">
+              <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
             </Button>
             {selectedService && (
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 onClick={() => { setSelectedService(null); setSelectedExam(null); }}
-                className="text-blue-400 hover:bg-blue-500/10 font-bold uppercase text-[10px] gap-2"
+                className="border-blue-500/20 text-blue-400 hover:bg-blue-500/10 rounded-xl font-black uppercase text-[10px] px-6 h-12 gap-2"
               >
-                <ArrowLeft className="w-4 h-4" /> Voltar à Fila
+                <ArrowLeft className="w-4 h-4" /> Sair do Atendimento
               </Button>
             )}
           </div>
         </div>
 
         {!selectedService ? (
-          /* FILA DE ATENDIMENTOS */
+          /* LISTA DE ATENDIMENTOS (FILA) */
           <div className="space-y-6">
-            <div className="relative">
-              <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
+            <div className="relative group">
+              <Search className="absolute left-5 top-4 h-5 w-5 text-blue-300/20 group-focus-within:text-blue-400 transition-colors" />
               <Input 
-                placeholder="Buscar paciente na fila por nome ou CPF..." 
-                className="bg-blue-950/40 border-white/5 h-12 pl-12 rounded-2xl text-white font-bold"
+                placeholder="Filtrar fila por nome ou CPF..." 
+                className="bg-blue-950/40 border-white/5 h-14 pl-14 rounded-[1.5rem] text-white font-bold placeholder:text-blue-300/10 focus:ring-blue-500/20"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
 
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-32 opacity-50">
-                <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
-                <p className="text-[10px] font-black uppercase tracking-widest">Sincronizando com banco de dados...</p>
+              <div className="flex flex-col items-center justify-center py-40">
+                <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest animate-pulse">Sincronizando Fila...</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
                 {filteredServices.map(service => (
                   <button 
                     key={service.id}
                     onClick={() => setSelectedService(service)}
                     className={cn(
-                      "bg-blue-950/30 border p-6 rounded-[2.5rem] backdrop-blur-sm hover:border-blue-500/30 transition-all text-left group relative overflow-hidden",
+                      "bg-blue-950/30 border p-6 rounded-[2.5rem] backdrop-blur-sm hover:border-blue-500/40 transition-all text-left group relative",
                       service.status === 'finalizado' ? "border-emerald-500/20" : "border-white/5"
                     )}
                   >
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-12 h-12 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
                         <FileText className="w-6 h-6" />
                       </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-white uppercase line-clamp-1">{service.patients?.full_name}</h3>
-                        <p className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">CPF: {service.patients?.cpf}</p>
+                      <div className={cn(
+                        "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter",
+                        service.status === 'finalizado' ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
+                      )}>
+                        {service.status}
                       </div>
                     </div>
-                    <div className="space-y-2">
+                    
+                    <h3 className="text-sm font-bold text-white uppercase mb-1 truncate">{service.patients?.full_name}</h3>
+                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-6">CPF: {service.patients?.cpf}</p>
+                    
+                    <div className="space-y-2 border-t border-white/5 pt-4">
                       {service.service_exams?.map((se: any) => (
-                        <div key={se.id} className="flex items-center justify-between text-[9px] font-black uppercase tracking-tight">
-                          <span className="text-blue-300/30">{se.exams?.name}</span>
-                          <span className={cn(se.status === 'finalizado' ? "text-emerald-400" : "text-amber-400")}>
-                            {se.status}
-                          </span>
+                        <div key={se.id} className="flex items-center justify-between text-[9px] font-black uppercase">
+                          <span className="text-blue-300/30 truncate max-w-[150px]">{se.exams?.name}</span>
+                          <div className={cn("w-1.5 h-1.5 rounded-full", se.status === 'finalizado' ? "bg-emerald-500" : "bg-amber-500 animate-pulse")}></div>
                         </div>
                       ))}
                     </div>
@@ -235,65 +255,96 @@ const Results = () => {
             )}
           </div>
         ) : (
-          /* EDITOR DE RESULTADOS */
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in zoom-in duration-500">
+          /* WORKSTATION (EDITOR) */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in slide-in-from-right duration-500">
             
-            {/* Coluna 1: Lista de Exames do Paciente */}
+            {/* Sidebar de Exames */}
             <div className="lg:col-span-3 space-y-3">
-              <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6 mb-6">
-                <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">Paciente Selecionado</p>
+              <div className="bg-blue-900/20 border border-white/5 rounded-[2rem] p-6 mb-4">
+                <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">Paciente em Foco</p>
                 <h3 className="text-lg font-bold text-white uppercase leading-tight">{selectedService.patients?.full_name}</h3>
               </div>
               
-              {selectedService.service_exams?.map((se: any) => (
-                <button
-                  key={se.id}
-                  onClick={() => handleSelectExam(se)}
-                  className={cn(
-                    "w-full p-4 rounded-2xl border transition-all flex items-center justify-between group",
-                    selectedExam?.id === se.id 
-                      ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-900/40" 
-                      : "bg-blue-950/30 border-white/5 text-blue-300/60 hover:border-blue-500/30"
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <FlaskConical className={cn("w-4 h-4", selectedExam?.id === se.id ? "text-white" : "text-blue-500/50")} />
-                    <span className="text-[10px] font-black uppercase tracking-tight">{se.exams?.name}</span>
-                  </div>
-                  {se.status === 'finalizado' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <ChevronRight className="w-4 h-4" />}
-                </button>
-              ))}
+              <div className="space-y-2">
+                {selectedService.service_exams?.map((se: any) => (
+                  <button
+                    key={se.id}
+                    onClick={() => handleSelectExam(se)}
+                    className={cn(
+                      "w-full p-5 rounded-2xl border transition-all flex items-center justify-between group",
+                      selectedExam?.id === se.id 
+                        ? "bg-blue-600 border-blue-400 text-white shadow-xl shadow-blue-900/40" 
+                        : "bg-blue-950/40 border-white/5 text-blue-300/40 hover:border-blue-500/30"
+                    )}
+                  >
+                    <div className="flex items-center gap-4">
+                      <FlaskConical className={cn("w-5 h-5", selectedExam?.id === se.id ? "text-white" : "text-blue-500/30")} />
+                      <span className="text-[10px] font-black uppercase tracking-tight">{se.exams?.name}</span>
+                    </div>
+                    {se.status === 'finalizado' ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <ChevronRight className="w-4 h-4 opacity-20" />}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Coluna 2 e 3: Editor e Preview */}
+            {/* Editor Central */}
             <div className="lg:col-span-9">
               {selectedExam ? (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                   
-                  {/* CAIXINHA DE RESULTADOS */}
-                  <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] p-8 shadow-xl h-fit">
-                    <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest mb-8 flex items-center gap-2">
-                      <Edit3 className="w-4 h-4" /> Lançamento de Valores
-                    </h3>
+                  {/* Painel de Entrada */}
+                  <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl flex flex-col">
+                    <div className="flex items-center justify-between mb-10">
+                      <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-3">
+                        <Edit3 className="w-5 h-5" /> Lançamento de Dados
+                      </h3>
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => setManualMode(!manualMode)}
+                        className={cn("text-[9px] font-black uppercase gap-2 rounded-xl", manualMode ? "text-amber-400 bg-amber-400/10" : "text-blue-300/30")}
+                      >
+                        {manualMode ? <AlertCircle className="w-4 h-4" /> : <History className="w-4 h-4" />}
+                        {manualMode ? 'Modo Manual Ativo' : 'Alternar Modo'}
+                      </Button>
+                    </div>
                     
-                    <div className="space-y-5 max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
-                      {values.map((val, idx) => (
-                        <div key={idx} className="space-y-2">
-                          <label className="text-[10px] font-black text-blue-300/40 uppercase tracking-widest ml-1">
-                            {fieldLabels[idx] || `Campo ${idx + 1}`}
-                          </label>
-                          <Input 
-                            value={val}
-                            onChange={(e) => handleValueChange(idx, e.target.value)}
-                            className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold text-sm focus:ring-blue-500/50"
-                            placeholder="Digite o resultado..."
-                            autoFocus={idx === 0}
+                    <div className="space-y-6 flex-grow overflow-y-auto pr-4 custom-scrollbar max-h-[600px]">
+                      {manualMode ? (
+                        <div className="space-y-4">
+                          <p className="text-[10px] font-bold text-amber-400/60 uppercase text-center bg-amber-400/5 p-4 rounded-xl border border-amber-400/10">
+                            Você está editando o texto final diretamente. Use com cautela.
+                          </p>
+                          <Textarea 
+                            value={manualContent}
+                            onChange={(e) => setManualContent(e.target.value)}
+                            className="bg-blue-900/20 border-white/5 min-h-[400px] rounded-2xl text-white font-mono text-sm p-6 resize-none"
                           />
                         </div>
-                      ))}
-                      {values.length === 0 && (
-                        <div className="text-center py-12 opacity-20">
-                          <p className="text-[10px] font-bold uppercase tracking-widest">Este modelo não possui campos dinâmicos.</p>
+                      ) : (
+                        values.map((val, idx) => (
+                          <div key={idx} className="space-y-2 group">
+                            <label className="text-[10px] font-black text-blue-300/30 uppercase tracking-widest ml-1 group-focus-within:text-blue-400 transition-colors">
+                              {fieldLabels[idx] || `Campo ${idx + 1}`}
+                            </label>
+                            <Input 
+                              value={val}
+                              onChange={(e) => {
+                                const newVals = [...values];
+                                newVals[idx] = e.target.value;
+                                setValues(newVals);
+                              }}
+                              className="bg-blue-900/20 border-blue-500/10 h-14 rounded-2xl text-white font-bold text-base focus:ring-blue-500/40 focus:border-blue-500/40 transition-all"
+                              placeholder="Digite o valor..."
+                              autoFocus={idx === 0}
+                            />
+                          </div>
+                        ))
+                      )}
+                      
+                      {!manualMode && values.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-20 opacity-20">
+                          <AlertCircle className="w-12 h-12 mb-4" />
+                          <p className="text-[10px] font-bold uppercase tracking-widest">Nenhum campo dinâmico detectado no modelo.</p>
                         </div>
                       )}
                     </div>
@@ -301,32 +352,37 @@ const Results = () => {
                     <Button 
                       onClick={handleSave}
                       disabled={isSaving}
-                      className="w-full mt-8 bg-emerald-600 hover:bg-emerald-500 h-12 rounded-xl font-black uppercase text-xs gap-2 shadow-lg shadow-emerald-900/20"
+                      className="w-full mt-10 bg-emerald-600 hover:bg-emerald-500 h-14 rounded-2xl font-black uppercase text-xs gap-3 shadow-xl shadow-emerald-900/20 transition-all active:scale-95"
                     >
-                      {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-4 h-4" /> Finalizar e Salvar</>}
+                      {isSaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5" /> Finalizar e Salvar Resultado</>}
                     </Button>
                   </div>
 
-                  {/* QUADRO DE PRE-LAUDO (PREVIEW) */}
+                  {/* Painel de Preview */}
                   <div className="bg-blue-950/60 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col">
-                    <div className="bg-blue-900/30 border-b border-white/5 p-6">
-                      <h3 className="text-sm font-bold text-white uppercase tracking-tight">{selectedExam.exams?.name}</h3>
-                      <p className="text-[9px] text-blue-400 font-black uppercase tracking-widest">Visualização em Tempo Real</p>
+                    <div className="bg-blue-900/30 border-b border-white/5 p-8">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold text-white uppercase tracking-tight">{selectedExam.exams?.name}</h3>
+                          <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Visualização em Tempo Real</p>
+                        </div>
+                        <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                      </div>
                     </div>
-                    <div className="p-8 flex-grow bg-black/20">
-                      <Textarea 
-                        value={previewContent}
-                        readOnly
-                        className="w-full min-h-[500px] bg-transparent border-none text-blue-50 font-mono text-sm p-0 resize-none leading-relaxed focus:ring-0 cursor-default"
-                      />
+                    <div className="p-10 flex-grow bg-black/30">
+                      <div className="w-full h-full bg-transparent text-blue-50 font-mono text-sm leading-relaxed whitespace-pre-wrap opacity-80">
+                        {previewContent}
+                      </div>
                     </div>
                   </div>
 
                 </div>
               ) : (
-                <div className="h-[600px] flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-white/5 rounded-[2.5rem]">
-                  <FlaskConical className="w-16 h-16 mb-4" />
-                  <p className="font-bold uppercase tracking-widest text-sm">Selecione um exame ao lado para começar</p>
+                <div className="h-[700px] flex flex-col items-center justify-center opacity-10 border-4 border-dashed border-white/5 rounded-[3rem]">
+                  <FlaskConical className="w-24 h-24 mb-6" />
+                  <p className="font-black uppercase tracking-[0.3em] text-lg">Selecione um exame para iniciar</p>
                 </div>
               )}
             </div>
