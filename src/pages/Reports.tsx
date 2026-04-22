@@ -128,14 +128,17 @@ const styles = StyleSheet.create({
     paddingLeft: 4
   },
 
-  // TABELA DO RIN
-  rinTableRow: {
+  // COAGULOGRAMA - bloco RIN organizado
+  rinRow: {
     flexDirection: "row",
-    marginBottom: 1
+    marginBottom: 2
   },
-  rinCol: {
-    width: "25%",
-    paddingRight: 4
+  rinLeft: {
+    width: "35%",
+    paddingRight: 6
+  },
+  rinRight: {
+    width: "65%"
   },
 
   resultText: {
@@ -150,7 +153,7 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: "#333333",
     fontFamily: "Times-Roman",
-    lineHeight: 1.05
+    lineHeight: 1.1
   }
 });
 
@@ -162,12 +165,6 @@ const cleanGarbage = (text: string) => {
     .replace(/-{5,}/g, "")
     .replace(/[ ]{2,}/g, " ")
     .trim();
-};
-
-const splitIntoColumns4 = (line: string) => {
-  const parts = line.split(/\s{5,}/).map((p) => cleanGarbage(p));
-  const cols = [parts[0] || "", parts[1] || "", parts[2] || "", parts[3] || ""];
-  return cols;
 };
 
 const renderHTMLContent = (html: string, examName: string) => {
@@ -185,8 +182,7 @@ const renderHTMLContent = (html: string, examName: string) => {
   const lines = cleanHtml.split("\n");
   const examUpper = (examName || "").trim().toUpperCase();
 
-  // DETECTA BLOCO DO RIN NO COAGULOGRAMA
-  let rinMode = false;
+  let coagRinMode = false;
 
   return lines.map((line, i) => {
     let trimmedLine = line.trim();
@@ -243,37 +239,50 @@ const renderHTMLContent = (html: string, examName: string) => {
       upper.includes("VALVULAS") ||
       upper.includes("ENXERTOS") ||
       upper.includes("FAIXA TERAPÊUTICA") ||
-      upper.includes("FAIXA TERAPEUTICA") ||
-      upper.includes("DESEJÁVEL");
+      upper.includes("FAIXA TERAPEUTICA");
 
-    // ATIVA MODO RIN NO COAGULOGRAMA
-    if (examUpper === "COAGULOGRAMA" && upper.startsWith("RIN:")) {
-      rinMode = true;
+    // ATIVA MODO RIN DO COAG
+    if (examUpper === "COAGULOGRAMA" && upper.startsWith("VALORES REFERENCIAIS:")) {
+      coagRinMode = true;
     }
 
-    // SE ESTÁ NO BLOCO DO RIN, TRANSFORMA EM TABELA 4 COLUNAS
-    if (examUpper === "COAGULOGRAMA" && rinMode) {
-      // Sai do modo se encontrar uma nova seção
-      if (
-        upper.startsWith("MATERIAL:") ||
+    // FINALIZA MODO RIN DO COAG QUANDO COMEÇA NOVA SEÇÃO
+    if (
+      examUpper === "COAGULOGRAMA" &&
+      coagRinMode &&
+      (upper.startsWith("MATERIAL: PLASMA") ||
         upper.startsWith("TEMPO DE TROMBOPLASTINA") ||
         upper.startsWith("TEMPO DE SANGRAMENTO") ||
-        upper.startsWith("TEMPO DE COAGULAÇÃO")
-      ) {
-        rinMode = false;
-      } else {
-        const cols = splitIntoColumns4(trimmedLine);
+        upper.startsWith("TEMPO DE COAGULAÇÃO"))
+    ) {
+      coagRinMode = false;
+    }
+
+    // BLOCO ESPECIAL DO COAGULOGRAMA PARA LINHAS RIN
+    if (examUpper === "COAGULOGRAMA" && coagRinMode) {
+      if (upper.startsWith("RIN:")) {
+        const left = trimmedLine.split("=")[0].trim();
+        const right = trimmedLine.includes("=")
+          ? trimmedLine.split("=").slice(1).join("=").trim()
+          : "";
 
         return (
-          <View key={i} style={styles.rinTableRow}>
-            {cols.map((col, idx) => (
-              <View key={idx} style={styles.rinCol}>
-                <Text style={styles.refText}>{col}</Text>
-              </View>
-            ))}
+          <View key={i} style={styles.rinRow}>
+            <View style={styles.rinLeft}>
+              <Text style={styles.refText}>{left}</Text>
+            </View>
+            <View style={styles.rinRight}>
+              <Text style={styles.refText}>{right ? "= " + right : ""}</Text>
+            </View>
           </View>
         );
       }
+
+      return (
+        <View key={i} style={styles.htmlLine}>
+          <Text style={styles.refText}>{trimmedLine}</Text>
+        </View>
+      );
     }
 
     const isMainResultLine =
