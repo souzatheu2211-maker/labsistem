@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { 
   Settings, 
@@ -30,18 +30,11 @@ import {
   DialogTrigger,
   DialogFooter
 } from "@/components/ui/dialog";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import Quill from 'quill';
+import 'quill/dist/quill.snow.css';
 
 const SettingsPage = () => {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -51,17 +44,59 @@ const SettingsPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Estados para Pré-Laudos
   const [searchExam, setSearchExam] = useState('');
   const [selectedExam, setSelectedExam] = useState<any>(null);
   const [editContent, setEditContent] = useState('');
 
-  // Estados dos formulários
   const [newExam, setNewExam] = useState({ name: '', code: '', description: '' });
+  
+  const quillRef = useRef<any>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchAllData();
   }, []);
+
+  // Inicializa o Quill manualmente quando o editor aparece
+  useEffect(() => {
+    if (selectedExam && editorContainerRef.current && !quillRef.current) {
+      const quill = new Quill(editorContainerRef.current, {
+        theme: 'snow',
+        modules: {
+          toolbar: [
+            [{ 'header': [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline'],
+            [{ 'size': ['small', false, 'large', 'huge'] }],
+            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+            ['clean']
+          ]
+        },
+        placeholder: 'Digite o modelo do laudo aqui... Use (?) para campos que serão preenchidos depois.'
+      });
+
+      quill.on('text-change', () => {
+        setEditContent(quill.root.innerHTML);
+      });
+
+      quillRef.current = quill;
+    }
+
+    // Atualiza o conteúdo se o exame mudar
+    if (quillRef.current && selectedExam) {
+      const existingReport = preReports.find(r => r.exam_id === selectedExam.id);
+      const content = existingReport?.content || '';
+      if (quillRef.current.root.innerHTML !== content) {
+        quillRef.current.root.innerHTML = content;
+        setEditContent(content);
+      }
+    }
+
+    return () => {
+      if (quillRef.current && !selectedExam) {
+        quillRef.current = null;
+      }
+    };
+  }, [selectedExam, preReports]);
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -85,7 +120,11 @@ const SettingsPage = () => {
   const handleSelectExam = (exam: any) => {
     setSelectedExam(exam);
     const existingReport = preReports.find(r => r.exam_id === exam.id);
-    setEditContent(existingReport?.content || '');
+    const content = existingReport?.content || '';
+    setEditContent(content);
+    if (quillRef.current) {
+      quillRef.current.root.innerHTML = content;
+    }
     setSearchExam('');
   };
 
@@ -143,7 +182,10 @@ const SettingsPage = () => {
       const { error } = await supabase.from('exams').delete().eq('id', id);
       if (error) throw error;
       showSuccess('Exame removido.');
-      if (selectedExam?.id === id) setSelectedExam(null);
+      if (selectedExam?.id === id) {
+        setSelectedExam(null);
+        quillRef.current = null;
+      }
       fetchAllData();
     } catch (error: any) {
       showError(error.message);
@@ -154,20 +196,10 @@ const SettingsPage = () => {
     e.name.toLowerCase().includes(searchExam.toLowerCase())
   );
 
-  const quillModules = {
-    toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline'],
-      [{ 'size': ['small', false, 'large', 'huge'] }],
-      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-      ['clean']
-    ],
-  };
-
   const EditorComponent = () => (
     <div className={cn(
       "bg-blue-950/40 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col",
-      isExpanded ? "fixed inset-4 z-[100] bg-blue-950" : "h-full"
+      isExpanded ? "fixed inset-4 z-[100] bg-blue-950" : "h-full min-h-[600px]"
     )}>
       <div className="bg-blue-900/20 border-b border-white/5 p-6 flex items-center justify-between">
         <div>
@@ -185,7 +217,7 @@ const SettingsPage = () => {
           {!isExpanded && (
             <Button 
               variant="ghost" 
-              onClick={() => setSelectedExam(null)}
+              onClick={() => { setSelectedExam(null); quillRef.current = null; }}
               className="text-blue-300/40 hover:text-white gap-2 font-bold uppercase text-[10px]"
             >
               <X className="w-4 h-4" /> Fechar
@@ -201,14 +233,7 @@ const SettingsPage = () => {
         </div>
       </div>
       <div className="flex-grow p-4 bg-white text-black overflow-hidden flex flex-col">
-        <ReactQuill 
-          theme="snow" 
-          value={editContent} 
-          onChange={setEditContent}
-          modules={quillModules}
-          className="flex-grow overflow-y-auto"
-          placeholder="Digite o modelo do laudo aqui... Use (?) para campos que serão preenchidos depois."
-        />
+        <div ref={editorContainerRef} className="flex-grow overflow-y-auto" />
       </div>
     </div>
   );
@@ -239,7 +264,6 @@ const SettingsPage = () => {
 
           <TabsContent value="pre-reports" className="animate-in fade-in slide-in-from-top duration-500">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Lista de Exames para Seleção */}
               <div className="lg:col-span-4 space-y-4">
                 <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-6 backdrop-blur-sm">
                   <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Selecione um Exame</h3>
@@ -272,7 +296,6 @@ const SettingsPage = () => {
                 </div>
               </div>
 
-              {/* Editor */}
               <div className="lg:col-span-8">
                 {selectedExam ? (
                   <EditorComponent />
