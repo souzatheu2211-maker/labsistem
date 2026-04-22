@@ -19,9 +19,11 @@ const Routine = () => {
   useEffect(() => {
     fetchServices();
     
+    // Escuta mudanças em atendimentos E em exames individuais
     const channel = supabase
       .channel('routine-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, () => fetchServices())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'service_exams' }, () => fetchServices())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -69,7 +71,6 @@ const Routine = () => {
             <p className="text-blue-300/50 text-sm mt-1 font-medium">Fila de atendimentos e status de processamento</p>
           </div>
           
-          {/* Seletor de Data Funcional */}
           <div className="flex items-center gap-2 bg-blue-950/40 border border-white/5 p-1 rounded-2xl">
             <Button 
               variant="ghost" 

@@ -106,10 +106,11 @@ const Results = () => {
   };
 
   const handleSave = async () => {
-    if (!selectedExam) return;
+    if (!selectedExam || !selectedService) return;
     setIsSaving(true);
     try {
-      const { error } = await supabase
+      // 1. Atualizar o exame individual
+      const { error: examError } = await supabase
         .from('service_exams')
         .update({ 
           result_value: previewContent,
@@ -118,12 +119,32 @@ const Results = () => {
         })
         .eq('id', selectedExam.id);
 
-      if (error) throw error;
-      showSuccess('Resultado salvo!');
+      if (examError) throw examError;
+
+      // 2. Verificar se todos os exames deste atendimento foram finalizados
+      const { data: allExams } = await supabase
+        .from('service_exams')
+        .select('status')
+        .eq('service_id', selectedService.id);
+
+      const allFinished = allExams?.every(e => e.status === 'finalizado');
+
+      if (allFinished) {
+        // 3. Atualizar o status global do atendimento para 'finalizado'
+        await supabase
+          .from('services')
+          .update({ status: 'finalizado' })
+          .eq('id', selectedService.id);
+        
+        showSuccess('Atendimento completo e enviado para impressão!');
+      } else {
+        showSuccess('Resultado do exame salvo!');
+      }
+
       setSelectedExam(null);
       fetchServices();
     } catch (err: any) {
-      showError('Erro ao salvar.');
+      showError('Erro ao salvar: ' + err.message);
     } finally {
       setIsSaving(false);
     }
