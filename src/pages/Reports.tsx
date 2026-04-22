@@ -92,20 +92,20 @@ const styles = StyleSheet.create({
     fontFamily: "Times-Roman"
   },
   refText: {
-    fontSize: 6.5,
+    fontSize: 7,
     color: "#333333",
     fontFamily: "Times-Roman",
-    lineHeight: 1.1
+    lineHeight: 1.05
   }
 });
 
 const cleanGarbage = (text: string) => {
   return text
-    .replace(/&{2,}/g, "")       // remove &&&&&&
-    .replace(/_{2,}/g, "")       // remove ______
-    .replace(/\*{2,}/g, "")      // remove ******
-    .replace(/-{5,}/g, "")       // remove ------
-    .replace(/\s+\n/g, "\n")     // remove espaços antes de quebra
+    .replace(/&{2,}/g, "") // remove &&&&&&
+    .replace(/_{2,}/g, "") // remove ______
+    .replace(/\*{2,}/g, "") // remove ******
+    .replace(/-{5,}/g, "") // remove ------
+    .replace(/\s+\n/g, "\n") // remove espaços antes de quebra
     .trim();
 };
 
@@ -126,23 +126,35 @@ const renderHTMLContent = (html: string) => {
     if (!trimmedLine) return <View key={i} style={{ height: 6 }} />;
 
     trimmedLine = cleanGarbage(trimmedLine);
-
     if (!trimmedLine) return <View key={i} style={{ height: 6 }} />;
 
+    // Detecta se é linha de referência (agora MUITO mais completo)
     const isRefLine =
       trimmedLine.toUpperCase().includes("VALOR DE REFERÊNCIA") ||
       trimmedLine.toUpperCase().includes("VALORES DE REFERÊNCIA") ||
-      trimmedLine.toUpperCase().includes("NORMAL") ||
-      trimmedLine.toUpperCase().includes("ALTERADA") ||
-      trimmedLine.toUpperCase().includes("REF:");
+      trimmedLine.toUpperCase().includes("REFERÊNCIA") ||
+      trimmedLine.toUpperCase().includes("REF:") ||
+      trimmedLine.toUpperCase().includes("CRIANÇAS") ||
+      trimmedLine.toUpperCase().includes("ADOLESCENTES") ||
+      trimmedLine.toUpperCase().includes("ADULTOS") ||
+      trimmedLine.toUpperCase().includes("DESEJÁVEL") ||
+      trimmedLine.toUpperCase().includes("ACEITÁVEL") ||
+      trimmedLine.toUpperCase().includes("ALTO") ||
+      trimmedLine.toUpperCase().includes("BAIXO") ||
+      trimmedLine.toUpperCase().includes("ÓTIMO") ||
+      trimmedLine.toUpperCase().includes("LIMITRÓFE") ||
+      trimmedLine.toUpperCase().includes("LIMÍTROFE") ||
+      trimmedLine.toUpperCase().includes("MUITO ALTO") ||
+      trimmedLine.toUpperCase().includes("MUITO ELEVADO") ||
+      trimmedLine.toUpperCase().includes("INDETERMINADO") ||
+      trimmedLine.toUpperCase().includes("MÉTODO") ||
+      trimmedLine.toUpperCase().includes("MET.");
 
+    // Detecta linha principal do resultado (NÃO pode ser referência)
     const isMainResultLine =
       trimmedLine.includes(":") &&
       trimmedLine.match(/\(\?\)|\d/) &&
-      !trimmedLine.toUpperCase().includes("VALOR DE REFERÊNCIA") &&
-      !trimmedLine.toUpperCase().includes("VALORES DE REFERÊNCIA") &&
-      !trimmedLine.toUpperCase().includes("MÉTODO") &&
-      !trimmedLine.toUpperCase().includes("REFERÊNCIA");
+      !isRefLine;
 
     const parts = trimmedLine.split(/(<b>.*?<\/b>|<strong>.*?<\/strong>)/g);
 
@@ -202,7 +214,10 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
               </Text>
             </Text>
             <Text style={styles.label}>
-              DN: <Text style={styles.value}>{formatSafeDate(patient.birth_date)}</Text>
+              DN:{" "}
+              <Text style={styles.value}>
+                {formatSafeDate(patient.birth_date)}
+              </Text>
             </Text>
           </View>
 
@@ -211,7 +226,10 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
               CPF: <Text style={styles.value}>{patient.cpf}</Text>
             </Text>
             <Text style={styles.label}>
-              DATA: <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text>
+              DATA:{" "}
+              <Text style={styles.value}>
+                {formatSafeDate(service.created_at)}
+              </Text>
             </Text>
             <Text style={styles.label}>
               REGISTRO:{" "}
@@ -348,7 +366,7 @@ const Reports = () => {
         {selectedPatient && (
           <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6 flex items-center justify-between animate-in zoom-in duration-500">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white">
+              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-content text-white">
                 <User className="w-6 h-6" />
               </div>
               <div>
