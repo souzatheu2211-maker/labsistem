@@ -10,7 +10,7 @@ import NewService from "./pages/NewService";
 import Routine from "./pages/Routine";
 import Reports from "./pages/Reports";
 import SettingsPage from "./pages/Settings";
-import ResultEntry from "./pages/ResultEntry";
+import Results from "./pages/Results";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,7 +27,7 @@ const App = () => (
           <Route path="/pacientes" element={<Patients />} />
           <Route path="/novo-atendimento" element={<NewService />} />
           <Route path="/rotina" element={<Routine />} />
-          <Route path="/lancamento" element={<ResultEntry />} />
+          <Route path="/resultados" element={<Results />} />
           <Route path="/impressao" element={<Reports />} />
           <Route path="/config" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
