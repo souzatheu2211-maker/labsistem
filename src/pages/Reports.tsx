@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     alignItems: "baseline"
   },
   resultText: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: "Times-Bold"
   },
   normalText: {
@@ -101,11 +101,11 @@ const styles = StyleSheet.create({
 
 const cleanGarbage = (text: string) => {
   return text
-    .replace(/&{2,}/g, "") // remove &&&&&&
+    .replace(/&{1,}/g, "") // remove qualquer & ou &&&&&
     .replace(/_{2,}/g, "") // remove ______
     .replace(/\*{2,}/g, "") // remove ******
     .replace(/-{5,}/g, "") // remove ------
-    .replace(/\s+\n/g, "\n") // remove espaços antes de quebra
+    .replace(/[^\S\r\n]+/g, " ") // remove espaços duplicados mantendo quebra de linha
     .trim();
 };
 
@@ -128,7 +128,6 @@ const renderHTMLContent = (html: string) => {
     trimmedLine = cleanGarbage(trimmedLine);
     if (!trimmedLine) return <View key={i} style={{ height: 6 }} />;
 
-    // Detecta se é linha de referência (agora MUITO mais completo)
     const isRefLine =
       trimmedLine.toUpperCase().includes("VALOR DE REFERÊNCIA") ||
       trimmedLine.toUpperCase().includes("VALORES DE REFERÊNCIA") ||
@@ -150,7 +149,6 @@ const renderHTMLContent = (html: string) => {
       trimmedLine.toUpperCase().includes("MÉTODO") ||
       trimmedLine.toUpperCase().includes("MET.");
 
-    // Detecta linha principal do resultado (NÃO pode ser referência)
     const isMainResultLine =
       trimmedLine.includes(":") &&
       trimmedLine.match(/\(\?\)|\d/) &&
@@ -169,6 +167,11 @@ const renderHTMLContent = (html: string) => {
           let text = part.replace(/<[^>]*>/g, "");
 
           text = cleanGarbage(text);
+
+          // remove lixo invisível (caracteres não imprimíveis)
+          text = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
+
+          if (!text) return null;
 
           let textStyle = styles.normalText;
 
