@@ -12,7 +12,8 @@ import {
   Search,
   ChevronLeft,
   Menu,
-  Printer
+  Printer,
+  Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -77,6 +78,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           <SidebarItem icon={ClipboardList} label="Rotina Diária" to="/rotina" active={location.pathname === '/rotina'} collapsed={isCollapsed} />
           <SidebarItem icon={FileCheck} label="Resultados" to="/resultados" active={location.pathname === '/resultados'} collapsed={isCollapsed} />
           <SidebarItem icon={Printer} label="Impressão" to="/impressao" active={location.pathname === '/impressao'} collapsed={isCollapsed} />
+          <SidebarItem icon={Settings} label="Configurações" to="/configuracoes" active={location.pathname === '/configuracoes'} collapsed={isCollapsed} />
         </nav>
 
         <div className={cn("pt-6 border-t border-white/5", isCollapsed && "px-0")}>

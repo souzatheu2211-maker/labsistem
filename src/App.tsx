@@ -10,6 +10,7 @@ import NewService from "./pages/NewService";
 import Routine from "./pages/Routine";
 import Results from "./pages/Results";
 import Reports from "./pages/Reports";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/rotina" element={<Routine />} />
           <Route path="/resultados" element={<Results />} />
           <Route path="/impressao" element={<Reports />} />
+          <Route path="/configuracoes" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
