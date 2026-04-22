@@ -57,9 +57,9 @@ const SettingsPage = () => {
     fetchAllData();
   }, []);
 
-  // Inicializa o Quill manualmente quando o editor aparece
   useEffect(() => {
     if (selectedExam && editorContainerRef.current && !quillRef.current) {
+      // Configuração para preservar formatação ao colar
       const quill = new Quill(editorContainerRef.current, {
         theme: 'snow',
         modules: {
@@ -69,9 +69,12 @@ const SettingsPage = () => {
             [{ 'size': ['small', false, 'large', 'huge'] }],
             [{ 'list': 'ordered'}, { 'list': 'bullet' }],
             ['clean']
-          ]
+          ],
+          clipboard: {
+            matchVisual: false // Evita que o Quill tente "adivinhar" a formatação visual e mude o HTML
+          }
         },
-        placeholder: 'Digite o modelo do laudo aqui... Use (?) para campos que serão preenchidos depois.'
+        placeholder: 'Cole seu laudo aqui ou digite o modelo... Use (?) para campos variáveis.'
       });
 
       quill.on('text-change', () => {
@@ -80,7 +83,6 @@ const SettingsPage = () => {
 
       quillRef.current = quill;
 
-      // Carrega o conteúdo inicial
       const existingReport = preReports.find(r => r.exam_id === selectedExam.id);
       if (existingReport) {
         quill.root.innerHTML = existingReport.content;
@@ -93,7 +95,7 @@ const SettingsPage = () => {
         quillRef.current = null;
       }
     };
-  }, [selectedExam]); // Só re-executa se o exame selecionado mudar (montar/desmontar editor)
+  }, [selectedExam]);
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -115,7 +117,6 @@ const SettingsPage = () => {
   };
 
   const handleSelectExam = (exam: any) => {
-    // Se já houver um editor, limpa a referência para forçar a reinicialização com o novo conteúdo
     quillRef.current = null;
     setSelectedExam(exam);
     setSearchExam('');
