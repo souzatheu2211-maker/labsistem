@@ -35,6 +35,28 @@ const formatSafeDate = (dateStr: string) => {
   return format(parseISO(dateStr), "dd/MM/yyyy");
 };
 
+const abbreviateName = (fullName: string, maxLength: number = 36) => {
+  if (!fullName) return "";
+  const upper = fullName.toUpperCase();
+
+  if (upper.length <= maxLength) return upper;
+
+  const parts = upper.split(" ").filter(Boolean);
+  if (parts.length <= 2) return upper.substring(0, maxLength - 3) + "...";
+
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const middle = parts.slice(1, parts.length - 1).map((p) => p[0] + ".");
+
+  let abbreviated = [first, ...middle, last].join(" ");
+  if (abbreviated.length <= maxLength) return abbreviated;
+
+  abbreviated = [first, last].join(" ");
+  if (abbreviated.length <= maxLength) return abbreviated;
+
+  return upper.substring(0, maxLength - 3) + "...";
+};
+
 const styles = StyleSheet.create({
   page: {
     paddingTop: 200,
@@ -74,6 +96,14 @@ const styles = StyleSheet.create({
     fontFamily: "Times-Roman",
     color: "#000000"
   },
+
+  pageTitle: {
+    fontSize: 14,
+    fontFamily: "Times-Bold",
+    textAlign: "center",
+    marginBottom: 14
+  },
+
   examBlock: {
     marginBottom: 18
   },
@@ -163,8 +193,6 @@ const renderHTMLContent = (html: string) => {
       trimmedLine.toUpperCase().includes("MUITO ALTO") ||
       trimmedLine.toUpperCase().includes("MUITO ELEVADO") ||
       trimmedLine.toUpperCase().includes("INDETERMINADO") ||
-
-      // MÉTODOS (ficam pequenos igual referência)
       trimmedLine.toUpperCase().includes("MÉTODO") ||
       trimmedLine.toUpperCase().includes("MET.") ||
       trimmedLine.toUpperCase().includes("LABTEST") ||
@@ -186,7 +214,6 @@ const renderHTMLContent = (html: string) => {
 
     const hasTab = trimmedLine.includes("\t");
 
-    // LINHA PRINCIPAL: NOME DO EXAME À ESQUERDA / RESULTADO À DIREITA
     if (isMainResultLine) {
       const [left, ...rest] = trimmedLine.split(":");
       const right = rest.join(":").trim();
@@ -203,7 +230,6 @@ const renderHTMLContent = (html: string) => {
       );
     }
 
-    // TABELA EM 2 COLUNAS (TAB)
     if (hasTab) {
       const cols = trimmedLine.split("\t").map((c) => cleanGarbage(c));
 
@@ -230,7 +256,6 @@ const renderHTMLContent = (html: string) => {
       );
     }
 
-    // LINHA NORMAL
     return (
       <View
         key={i}
@@ -246,64 +271,127 @@ const renderHTMLContent = (html: string) => {
   });
 };
 
+const getExamGroup = (examName: string) => {
+  const n = (examName || "").toUpperCase();
+
+  if (n.includes("HEMOGRAMA")) return "HEMOGRAMA";
+  if (n.includes("COAGULOGRAMA")) return "COAGULOGRAMA";
+  if (n.includes("SUMÁRIO DE URINA") || n.includes("EAS")) return "URINA";
+  if (n.includes("PARASITOLÓGICO DE FEZES")) return "FEZES";
+  if (n.includes("BETA HCG")) return "BETA_HCG";
+
+  return "GERAL";
+};
+
+const getGroupTitle = (group: string) => {
+  if (group === "HEMOGRAMA") return "HEMOGRAMA COMPLETO";
+  if (group === "COAGULOGRAMA") return "COAGULOGRAMA";
+  if (group === "URINA") return "SUMÁRIO DE URINA";
+  if (group === "FEZES") return "PARASITOLÓGICO DE FEZES";
+  if (group === "BETA_HCG") return "BETA HCG";
+  return "EXAMES LABORATORIAIS";
+};
+
+const labOrder = [
+  "HEMOGRAMA",
+  "COAGULOGRAMA",
+  "URINA",
+  "FEZES",
+  "BETA_HCG",
+  "GERAL"
+];
+
 const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
-  const sortedExams = [...(service.service_exams || [])].sort((a, b) => {
-    const orderA = a.exams?.pre_reports?.[0]?.order_index ?? 999;
-    const orderB = b.exams?.pre_reports?.[0]?.order_index ?? 999;
-    return orderA - orderB;
+  const timbreUrl = `${window.location.origin}/timbre.png`;
+
+  const allExams = [...(service.service_exams || [])];
+
+  const grouped: Record<string, any[]> = {
+    HEMOGRAMA: [],
+    COAGULOGRAMA: [],
+    URINA: [],
+    FEZES: [],
+    BETA_HCG: [],
+    GERAL: []
+  };
+
+  allExams.forEach((se: any) => {
+    const examName = se.exams?.name || "";
+    const group = getExamGroup(examName);
+    grouped[group].push(se);
   });
 
-  const timbreUrl = `${window.location.origin}/timbre.png`;
+  // Ordenação interna: por order_index se existir, senão por nome
+  Object.keys(grouped).forEach((key) => {
+    grouped[key] = grouped[key].sort((a, b) => {
+      const orderA = a.exams?.pre_reports?.[0]?.order_index ?? 999;
+      const orderB = b.exams?.pre_reports?.[0]?.order_index ?? 999;
+
+      if (orderA !== orderB) return orderA - orderB;
+
+      const nameA = (a.exams?.name || "").toUpperCase();
+      const nameB = (b.exams?.name || "").toUpperCase();
+      return nameA.localeCompare(nameB);
+    });
+  });
+
+  const patientName = abbreviateName(patient.full_name, 36);
 
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
-      <Page size="A4" style={styles.page}>
-        <Image src={timbreUrl} style={styles.background} fixed />
+      {labOrder.map((groupKey) => {
+        const examsInGroup = grouped[groupKey] || [];
+        if (examsInGroup.length === 0) return null;
 
-        <View style={styles.patientInfoFixed} fixed>
-          <View style={styles.patientRow}>
-            <Text style={styles.label}>
-              PACIENTE:{" "}
-              <Text style={styles.value}>
-                {patient.full_name.toUpperCase()}
-              </Text>
-            </Text>
+        return (
+          <Page key={groupKey} size="A4" style={styles.page}>
+            <Image src={timbreUrl} style={styles.background} fixed />
 
-            <Text style={styles.label}>
-              DATA DE NASCIMENTO:{" "}
-              <Text style={styles.value}>
-                {formatSafeDate(patient.birth_date)}
-              </Text>
-            </Text>
-          </View>
+            <View style={styles.patientInfoFixed} fixed>
+              <View style={styles.patientRow}>
+                <Text style={styles.label}>
+                  PACIENTE: <Text style={styles.value}>{patientName}</Text>
+                </Text>
 
-          <View style={styles.patientRow}>
-            <Text style={styles.label}>
-              CPF: <Text style={styles.value}>{patient.cpf}</Text>
-            </Text>
+                <Text style={styles.label}>
+                  DATA DE NASCIMENTO:{" "}
+                  <Text style={styles.value}>
+                    {formatSafeDate(patient.birth_date)}
+                  </Text>
+                </Text>
+              </View>
 
-            <Text style={styles.label}>
-              DATA:{" "}
-              <Text style={styles.value}>
-                {formatSafeDate(service.created_at)}
-              </Text>
-            </Text>
+              <View style={styles.patientRow}>
+                <Text style={styles.label}>
+                  CPF: <Text style={styles.value}>{patient.cpf}</Text>
+                </Text>
 
-            <Text style={styles.label}>
-              REGISTRO:{" "}
-              <Text style={styles.value}>
-                #{service.id.slice(0, 8).toUpperCase()}
-              </Text>
-            </Text>
-          </View>
-        </View>
+                <Text style={styles.label}>
+                  DATA:{" "}
+                  <Text style={styles.value}>
+                    {formatSafeDate(service.created_at)}
+                  </Text>
+                </Text>
 
-        {sortedExams.map((se: any) => (
-          <View key={se.id} style={styles.examBlock} wrap={false}>
-            {renderHTMLContent(se.result_value || "")}
-          </View>
-        ))}
-      </Page>
+                <Text style={styles.label}>
+                  REGISTRO:{" "}
+                  <Text style={styles.value}>
+                    #{service.id.slice(0, 8).toUpperCase()}
+                  </Text>
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.pageTitle}>{getGroupTitle(groupKey)}</Text>
+
+            {examsInGroup.map((se: any) => (
+              <View key={se.id} style={styles.examBlock} wrap={false}>
+                {renderHTMLContent(se.result_value || "")}
+              </View>
+            ))}
+          </Page>
+        );
+      })}
     </Document>
   );
 };
@@ -424,7 +512,7 @@ const Reports = () => {
         {selectedPatient && (
           <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6 flex items-center justify-between animate-in zoom-in duration-500">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-content text-white">
+              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white">
                 <User className="w-6 h-6" />
               </div>
               <div>
