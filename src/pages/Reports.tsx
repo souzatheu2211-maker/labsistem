@@ -177,42 +177,59 @@ const renderHTMLContent = (html: string) => {
 
     trimmedLine = trimmedLine.replace(/[\u200B-\u200D\uFEFF]/g, "");
 
+    const upper = trimmedLine.toUpperCase();
+
     const isRefLine =
-      trimmedLine.toUpperCase().includes("VALOR DE REFERÊNCIA") ||
-      trimmedLine.toUpperCase().includes("VALORES DE REFERÊNCIA") ||
-      trimmedLine.toUpperCase().includes("REFERÊNCIA") ||
-      trimmedLine.toUpperCase().includes("REF:") ||
-      trimmedLine.toUpperCase().includes("CRIANÇAS") ||
-      trimmedLine.toUpperCase().includes("ADOLESCENTES") ||
-      trimmedLine.toUpperCase().includes("ADULTOS") ||
-      trimmedLine.toUpperCase().includes("DESEJÁVEL") ||
-      trimmedLine.toUpperCase().includes("ACEITÁVEL") ||
-      trimmedLine.toUpperCase().includes("ALTO") ||
-      trimmedLine.toUpperCase().includes("BAIXO") ||
-      trimmedLine.toUpperCase().includes("ÓTIMO") ||
-      trimmedLine.toUpperCase().includes("LIMITRÓFE") ||
-      trimmedLine.toUpperCase().includes("LIMÍTROFE") ||
-      trimmedLine.toUpperCase().includes("MUITO ALTO") ||
-      trimmedLine.toUpperCase().includes("MUITO ELEVADO") ||
-      trimmedLine.toUpperCase().includes("INDETERMINADO") ||
-      trimmedLine.toUpperCase().includes("MÉTODO") ||
-      trimmedLine.toUpperCase().includes("MET.") ||
-      trimmedLine.toUpperCase().includes("LABTEST") ||
-      trimmedLine.toUpperCase().includes("DIAGNÓSTICA") ||
-      trimmedLine.toUpperCase().includes("IMUNO") ||
-      trimmedLine.toUpperCase().includes("IFCC") ||
-      trimmedLine.toUpperCase().includes("WINTROBE") ||
-      trimmedLine.toUpperCase().includes("SZASZ") ||
-      trimmedLine.toUpperCase().includes("FOTOMETRIA") ||
-      trimmedLine.toUpperCase().includes("CINÉTICO") ||
-      trimmedLine.toUpperCase().includes("CINETICO") ||
-      trimmedLine.toUpperCase().includes("ENZIMÁTICO") ||
-      trimmedLine.toUpperCase().includes("ENZIMATICO");
+      upper.includes("VALOR DE REFERÊNCIA") ||
+      upper.includes("VALORES DE REFERÊNCIA") ||
+      upper.includes("VALOR REFERENCIAL") ||
+      upper.includes("VALORES REFERENCIAIS") ||
+      upper.includes("REFERÊNCIA") ||
+      upper.includes("REF:") ||
+      upper.includes("CRIANÇAS") ||
+      upper.includes("ADOLESCENTES") ||
+      upper.includes("ADULTOS") ||
+      upper.includes("DESEJÁVEL") ||
+      upper.includes("ACEITÁVEL") ||
+      upper.includes("ALTO") ||
+      upper.includes("BAIXO") ||
+      upper.includes("ÓTIMO") ||
+      upper.includes("LIMITRÓFE") ||
+      upper.includes("LIMÍTROFE") ||
+      upper.includes("MUITO ALTO") ||
+      upper.includes("MUITO ELEVADO") ||
+      upper.includes("INDETERMINADO") ||
+      upper.includes("MÉTODO") ||
+      upper.includes("MET.") ||
+      upper.includes("LABTEST") ||
+      upper.includes("DIAGNÓSTICA") ||
+      upper.includes("IMUNO") ||
+      upper.includes("IFCC") ||
+      upper.includes("WINTROBE") ||
+      upper.includes("SZASZ") ||
+      upper.includes("FOTOMETRIA") ||
+      upper.includes("CINÉTICO") ||
+      upper.includes("CINETICO") ||
+      upper.includes("ENZIMÁTICO") ||
+      upper.includes("ENZIMATICO") ||
+      upper.includes("PROFILAXIA") ||
+      upper.includes("TRATAMENTO") ||
+      upper.includes("TVP") ||
+      upper.includes("EMBOLIA") ||
+      upper.includes("CIRURGIA") ||
+      upper.includes("INFARTO") ||
+      upper.includes("ATAQUE ISQUÊMICO") ||
+      upper.includes("ATAQUE ISQUEMICO") ||
+      upper.includes("VÁLVULAS") ||
+      upper.includes("VALVULAS") ||
+      upper.includes("ENXERTOS");
 
     const isMainResultLine =
       trimmedLine.includes(":") &&
       !isRefLine &&
-      !trimmedLine.toUpperCase().includes("MATERIAL");
+      !upper.includes("MATERIAL") &&
+      !upper.includes("VALOR REFERENCIAL") &&
+      !upper.includes("VALORES REFERENCIAIS");
 
     const hasTab = trimmedLine.includes("\t");
     const hasMultiSpaceColumns = /\s{5,}/.test(trimmedLine);
