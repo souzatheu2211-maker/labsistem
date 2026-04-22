@@ -79,24 +79,21 @@ const SettingsPage = () => {
       });
 
       quillRef.current = quill;
-    }
 
-    // Atualiza o conteúdo se o exame mudar
-    if (quillRef.current && selectedExam) {
+      // Carrega o conteúdo inicial
       const existingReport = preReports.find(r => r.exam_id === selectedExam.id);
-      const content = existingReport?.content || '';
-      if (quillRef.current.root.innerHTML !== content) {
-        quillRef.current.root.innerHTML = content;
-        setEditContent(content);
+      if (existingReport) {
+        quill.root.innerHTML = existingReport.content;
+        setEditContent(existingReport.content);
       }
     }
 
     return () => {
-      if (quillRef.current && !selectedExam) {
+      if (quillRef.current) {
         quillRef.current = null;
       }
     };
-  }, [selectedExam, preReports]);
+  }, [selectedExam]); // Só re-executa se o exame selecionado mudar (montar/desmontar editor)
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -118,13 +115,9 @@ const SettingsPage = () => {
   };
 
   const handleSelectExam = (exam: any) => {
+    // Se já houver um editor, limpa a referência para forçar a reinicialização com o novo conteúdo
+    quillRef.current = null;
     setSelectedExam(exam);
-    const existingReport = preReports.find(r => r.exam_id === exam.id);
-    const content = existingReport?.content || '';
-    setEditContent(content);
-    if (quillRef.current) {
-      quillRef.current.root.innerHTML = content;
-    }
     setSearchExam('');
   };
 
@@ -196,48 +189,6 @@ const SettingsPage = () => {
     e.name.toLowerCase().includes(searchExam.toLowerCase())
   );
 
-  const EditorComponent = () => (
-    <div className={cn(
-      "bg-blue-950/40 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col",
-      isExpanded ? "fixed inset-4 z-[100] bg-blue-950" : "h-full min-h-[600px]"
-    )}>
-      <div className="bg-blue-900/20 border-b border-white/5 p-6 flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-bold text-white uppercase tracking-tight">{selectedExam.name}</h3>
-          <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Editor de Modelo Base</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="ghost" 
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-blue-300/40 hover:text-white gap-2 font-bold uppercase text-[10px]"
-          >
-            {isExpanded ? <><Minimize2 className="w-4 h-4" /> Minimizar</> : <><Maximize2 className="w-4 h-4" /> Expandir</>}
-          </Button>
-          {!isExpanded && (
-            <Button 
-              variant="ghost" 
-              onClick={() => { setSelectedExam(null); quillRef.current = null; }}
-              className="text-blue-300/40 hover:text-white gap-2 font-bold uppercase text-[10px]"
-            >
-              <X className="w-4 h-4" /> Fechar
-            </Button>
-          )}
-          <Button 
-            onClick={handleSavePreReport}
-            disabled={submitting}
-            className="bg-emerald-600 hover:bg-emerald-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-6"
-          >
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Salvar Modelo</>}
-          </Button>
-        </div>
-      </div>
-      <div className="flex-grow p-4 bg-white text-black overflow-hidden flex flex-col">
-        <div ref={editorContainerRef} className="flex-grow overflow-y-auto" />
-      </div>
-    </div>
-  );
-
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-700">
@@ -298,7 +249,45 @@ const SettingsPage = () => {
 
               <div className="lg:col-span-8">
                 {selectedExam ? (
-                  <EditorComponent />
+                  <div className={cn(
+                    "bg-blue-950/40 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col",
+                    isExpanded ? "fixed inset-4 z-[100] bg-blue-950" : "h-full min-h-[600px]"
+                  )}>
+                    <div className="bg-blue-900/20 border-b border-white/5 p-6 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-bold text-white uppercase tracking-tight">{selectedExam.name}</h3>
+                        <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Editor de Modelo Base</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => setIsExpanded(!isExpanded)}
+                          className="text-blue-300/40 hover:text-white gap-2 font-bold uppercase text-[10px]"
+                        >
+                          {isExpanded ? <><Minimize2 className="w-4 h-4" /> Minimizar</> : <><Maximize2 className="w-4 h-4" /> Expandir</>}
+                        </Button>
+                        {!isExpanded && (
+                          <Button 
+                            variant="ghost" 
+                            onClick={() => { setSelectedExam(null); quillRef.current = null; }}
+                            className="text-blue-300/40 hover:text-white gap-2 font-bold uppercase text-[10px]"
+                          >
+                            <X className="w-4 h-4" /> Fechar
+                          </Button>
+                        )}
+                        <Button 
+                          onClick={handleSavePreReport}
+                          disabled={submitting}
+                          className="bg-emerald-600 hover:bg-emerald-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-6"
+                        >
+                          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Salvar Modelo</>}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex-grow p-4 bg-white text-black overflow-hidden flex flex-col">
+                      <div ref={editorContainerRef} className="flex-grow overflow-y-auto" />
+                    </div>
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-[600px] opacity-20 border-2 border-dashed border-white/5 rounded-[2.5rem]">
                     <FileText className="w-16 h-16 mb-4" />
