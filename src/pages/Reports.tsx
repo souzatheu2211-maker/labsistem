@@ -70,21 +70,14 @@ const styles = StyleSheet.create({
     fontSize: 10, 
     fontFamily: 'Helvetica',
   },
-  sectorTitle: {
+  examBlock: {
+    marginBottom: 25, 
+  },
+  examName: {
     fontSize: 11,
     fontFamily: 'Helvetica-Bold',
     textAlign: 'center',
-    marginTop: 15,
-    marginBottom: 10,
-    textTransform: 'uppercase',
-  },
-  examBlock: {
-    marginBottom: 15, 
-  },
-  examName: {
-    fontSize: 10,
-    fontFamily: 'Helvetica-Bold',
-    marginBottom: 4,
+    marginBottom: 12,
     textTransform: 'uppercase',
   },
   resultText: {
@@ -103,6 +96,7 @@ const formatFinalReport = (text: string) => {
 };
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
+  // Mantemos a ordenação por setor internamente, mas não exibimos o título do setor
   const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA"];
   
   const getSector = (examName: string) => {
@@ -142,8 +136,7 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
         {sectorOrder.map(sector => {
           if (!groups[sector]) return null;
           return (
-            <View key={sector} wrap={false}>
-              <Text style={styles.sectorTitle}>{sector}</Text>
+            <View key={sector}>
               {groups[sector].map((se: any) => (
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
