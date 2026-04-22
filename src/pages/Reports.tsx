@@ -85,35 +85,24 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier', 
     lineHeight: 1.2,
     color: '#000000',
+    minHeight: 10, // Garante que linhas vazias ocupem espaço
   }
 });
 
 const formatFinalReport = (text: string) => {
   if (!text) return [];
+  // Divide por quebra de linha e remove apenas os placeholders de preenchimento remanescentes
   return text.split('\n').map(line => {
-    return line.replace(/\(\s*[?&]\s*\)/g, '').replace(/\(\?\)/g, '');
+    return line.replace(/\(\?\)/g, '').replace(/\(\s*[?&]\s*\)/g, '');
   });
 };
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
-  // Mantemos a ordenação por setor internamente, mas não exibimos o título do setor
-  const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA"];
-  
-  const getSector = (examName: string) => {
-    const name = examName.toUpperCase();
-    if (name.includes("HEMOGRAMA") || name.includes("SANGUE")) return "HEMATOLOGIA";
-    if (name.includes("GLICOSE") || name.includes("GLICEMIA") || name.includes("COLESTEROL") || name.includes("TRIGLI") || name.includes("UREIA") || name.includes("CREATININA") || name.includes("TGO") || name.includes("TGP") || name.includes("HBA1C") || name.includes("GLICADA")) return "BIOQUÍMICA";
-    if (name.includes("URINA") || name.includes("EAS")) return "URINÁLISE";
-    if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
-    if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
-    return "HEMATOLOGIA";
-  };
-
-  const groups: { [key: string]: any[] } = {};
-  service.service_exams.forEach((se: any) => {
-    const sector = getSector(se.exams?.name || "");
-    if (!groups[sector]) groups[sector] = [];
-    groups[sector].push(se);
+  // Agrupa e ordena os exames com base nos dados do banco (pre_reports)
+  const sortedExams = [...(service.service_exams || [])].sort((a, b) => {
+    const orderA = a.exams?.pre_reports?.[0]?.order_index ?? 999;
+    const orderB = b.exams?.pre_reports?.[0]?.order_index ?? 999;
+    return orderA - orderB;
   });
 
   const timbreUrl = `${window.location.origin}/timbre.png`;
@@ -133,21 +122,17 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
             <Text style={styles.label}>DATA: <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text></Text>
           </View>
         </View>
-        {sectorOrder.map(sector => {
-          if (!groups[sector]) return null;
-          return (
-            <View key={sector}>
-              {groups[sector].map((se: any) => (
-                <View key={se.id} style={styles.examBlock} wrap={false}>
-                  <Text style={styles.examName}>{se.exams?.name}</Text>
-                  {formatFinalReport(se.result_value || "").map((line: string, i: number) => (
-                    <Text key={i} style={styles.resultText}>{line}</Text>
-                  ))}
-                </View>
-              ))}
-            </View>
-          );
-        })}
+        
+        {sortedExams.map((se: any) => (
+          <View key={se.id} style={styles.examBlock} wrap={false}>
+            <Text style={styles.examName}>{se.exams?.name}</Text>
+            {formatFinalReport(se.result_value || "").map((line: string, i: number) => (
+              <Text key={i} style={styles.resultText}>
+                {line || " "} 
+              </Text>
+            ))}
+          </View>
+        ))}
       </Page>
     </Document>
   );
@@ -200,7 +185,13 @@ const Reports = () => {
         *,
         service_exams (
           *,
-          exams (name)
+          exams (
+            name,
+            pre_reports (
+              sector,
+              order_index
+            )
+          )
         )
       `)
       .eq("patient_id", patientId)
