@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
     paddingTop: 170,    
     paddingBottom: 80,  
     paddingHorizontal: 50,
-    fontFamily: 'Times-Roman',
+    fontFamily: 'Courier', // Usando Courier para garantir que espaços tenham largura fixa
     backgroundColor: '#ffffff',
   },
   background: {
@@ -56,6 +56,7 @@ const styles = StyleSheet.create({
     left: 50,
     right: 50,
     paddingBottom: 10,
+    fontFamily: 'Helvetica-Bold',
   },
   patientRow: {
     flexDirection: 'row',
@@ -63,16 +64,15 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   label: {
-    fontSize: 12, 
-    fontFamily: 'Times-Bold',
+    fontSize: 10, 
   },
   value: {
-    fontSize: 12, 
-    fontFamily: 'Times-Roman',
+    fontSize: 10, 
+    fontFamily: 'Helvetica',
   },
   sectorTitle: {
     fontSize: 11,
-    fontFamily: 'Times-Bold',
+    fontFamily: 'Helvetica-Bold',
     textAlign: 'center',
     textDecoration: 'underline',
     marginTop: 15,
@@ -83,35 +83,26 @@ const styles = StyleSheet.create({
     marginBottom: 15, 
   },
   examName: {
-    fontSize: 11,
-    fontFamily: 'Times-Bold',
+    fontSize: 10,
+    fontFamily: 'Helvetica-Bold',
     marginBottom: 4,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 11,
-    fontFamily: 'Times-Roman',
+    fontSize: 9,
+    fontFamily: 'Courier', // Preserva alinhamento de tabelas e espaços
     lineHeight: 1.2,
     color: '#000000',
-  },
-  referenceText: {
-    fontSize: 9,
-    fontFamily: 'Times-Roman',
-    color: '#333333',
-    marginTop: 1,
-    lineHeight: 1.2,
   }
 });
 
+// Função ajustada para manter espaços "a risca"
 const formatFinalReport = (text: string) => {
   if (!text) return [];
   return text.split('\n').map(line => {
-    let cleaned = line.replace(/\(\s*[?&]\s*\)/g, '').trim();
-    cleaned = cleaned.replace(/_{2,}/g, '');
-    cleaned = cleaned.replace(/\?{2,}/g, '');
-    cleaned = cleaned.replace(/\s{2,}/g, ' ');
-    return cleaned.trim();
-  }).filter(line => line.length > 0);
+    // Remove apenas o marcador de preenchimento, mantendo todo o resto intacto
+    return line.replace(/\(\s*[?&]\s*\)/g, '').replace(/\(\?\)/g, '');
+  });
 };
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
@@ -159,10 +150,9 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
               {groups[sector].map((se: any) => (
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
-                  {formatFinalReport(se.result_value || "").map((line: string, i: number) => {
-                    const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:") || line.toLowerCase().includes("vr:");
-                    return <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>{line}</Text>;
-                  })}
+                  {formatFinalReport(se.result_value || "").map((line: string, i: number) => (
+                    <Text key={i} style={styles.resultText}>{line}</Text>
+                  ))}
                 </View>
               ))}
             </View>
