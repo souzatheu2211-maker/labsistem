@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: "absolute",
-    top: 145, // <-- ajustado um pouco mais pra cima
+    top: 145,
     left: 50,
     right: 50,
     borderBottom: 1,
@@ -101,11 +101,11 @@ const styles = StyleSheet.create({
 
 const cleanGarbage = (text: string) => {
   return text
-    .replace(/&{1,}/g, "") // remove qualquer & ou &&&&&
-    .replace(/_{2,}/g, "") // remove ______
-    .replace(/\*{2,}/g, "") // remove ******
-    .replace(/-{5,}/g, "") // remove ------
-    .replace(/[^\S\r\n]+/g, " ") // remove espaços duplicados mantendo quebra de linha
+    .replace(/&{1,}/g, "")
+    .replace(/_{2,}/g, "")
+    .replace(/\*{2,}/g, "")
+    .replace(/-{5,}/g, "")
+    .replace(/[ ]{2,}/g, " ")
     .trim();
 };
 
@@ -154,6 +154,31 @@ const renderHTMLContent = (html: string) => {
       trimmedLine.match(/\(\?\)|\d/) &&
       !isRefLine;
 
+    const hasTab = trimmedLine.includes("\t");
+
+    if (hasTab) {
+      const cols = trimmedLine.split("\t").map((c) => cleanGarbage(c));
+
+      return (
+        <View
+          key={i}
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginBottom: isRefLine ? 0 : 1
+          }}
+        >
+          <Text style={isRefLine ? styles.refText : styles.normalText}>
+            {cols[0] || ""}
+          </Text>
+
+          <Text style={isRefLine ? styles.refText : styles.normalText}>
+            {cols[1] || ""}
+          </Text>
+        </View>
+      );
+    }
+
     const parts = trimmedLine.split(/(<b>.*?<\/b>|<strong>.*?<\/strong>)/g);
 
     const lineStyle = isRefLine
@@ -167,8 +192,6 @@ const renderHTMLContent = (html: string) => {
           let text = part.replace(/<[^>]*>/g, "");
 
           text = cleanGarbage(text);
-
-          // remove lixo invisível (caracteres não imprimíveis)
           text = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
 
           if (!text) return null;
