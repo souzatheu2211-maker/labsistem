@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showSuccess, showError } from "@/utils/toast";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { 
   Document, 
   Page, 
@@ -27,13 +27,23 @@ import {
   Image
 } from "@react-pdf/renderer";
 
+// Função para formatar data sem erro de fuso horário (UTC para Local)
+const formatSafeDate = (dateStr: string) => {
+  if (!dateStr) return "";
+  if (dateStr.length === 10) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return format(new Date(year, month - 1, day), "dd/MM/yyyy");
+  }
+  return format(parseISO(dateStr), "dd/MM/yyyy");
+};
+
 // Configuração de Estilos para o PDF (A4)
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 155,    // Espaço para o cabeçalho e info do paciente
-    paddingBottom: 80,  // Espaço para o rodapé do timbre
+    paddingTop: 170,    
+    paddingBottom: 80,  
     paddingHorizontal: 50,
-    fontFamily: 'Times-Roman',
+    fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
   },
   background: {
@@ -45,56 +55,58 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: 'absolute',
-    top: 110, // Movido mais para cima
+    top: 115, 
     left: 50,
     right: 50,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: 1,
     borderBottomColor: '#000',
-    paddingBottom: 5,
+    paddingBottom: 10,
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: 5,
   },
   label: {
-    fontSize: 9,
+    fontSize: 13, 
     fontWeight: 'bold',
   },
   value: {
-    fontSize: 9,
+    fontSize: 13, 
   },
   sectorTitle: {
-    fontSize: 11,
+    fontSize: 12,
     textAlign: 'center',
     textDecoration: 'underline',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 15,
+    marginBottom: 12,
     textTransform: 'uppercase',
+    fontWeight: 'bold',
   },
   examBlock: {
-    marginBottom: 12,
+    marginBottom: 25, 
   },
   examName: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
-    marginBottom: 3,
+    marginBottom: 6,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 10, // Reduzido de 12 para 10
+    fontSize: 11, // Ajustado para 11 em Courier para não estourar a margem, mas manter o alinhamento
+    fontFamily: 'Courier', // Fonte monoespaçada preserva os espaços e pontos de alinhamento
     lineHeight: 1.2,
     color: '#000000',
   },
   referenceText: {
-    fontSize: 8,
+    fontSize: 9, 
+    fontFamily: 'Courier',
     color: '#333333',
-    marginTop: 1,
+    marginTop: 2,
   }
 });
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
-  // Removido "OUTROS" da ordem de setores
   const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA"];
   
   const getSector = (examName: string) => {
@@ -104,7 +116,7 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
     if (name.includes("URINA") || name.includes("EAS")) return "URINÁLISE";
     if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
     if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
-    return "HEMATOLOGIA"; // Default para não cair em "OUTROS"
+    return "HEMATOLOGIA";
   };
 
   const groups: { [key: string]: any[] } = {};
@@ -119,10 +131,8 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
-        {/* Timbre como fundo fixo */}
         <Image src={timbreUrl} style={styles.background} fixed />
 
-        {/* Informações do Paciente FIXAS em todas as páginas */}
         <View style={styles.patientInfoFixed} fixed>
           <View style={styles.patientRow}>
             <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
@@ -130,12 +140,11 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
           </View>
           <View style={styles.patientRow}>
             <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
-            <Text style={styles.label}>DN: <Text style={styles.value}>{format(new Date(patient.birth_date), "dd/MM/yyyy")}</Text></Text>
-            <Text style={styles.label}>DATA: <Text style={styles.value}>{format(new Date(service.created_at), "dd/MM/yyyy")}</Text></Text>
+            <Text style={styles.label}>DN: <Text style={styles.value}>{formatSafeDate(patient.birth_date)}</Text></Text>
+            <Text style={styles.label}>DATA: <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text></Text>
           </View>
         </View>
 
-        {/* Conteúdo dos Exames por Setor */}
         {sectorOrder.map(sector => {
           if (!groups[sector]) return null;
           
@@ -146,16 +155,18 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
                   {se.result_value
-                    ?.replace(/\(\?\)/g, '') // Remove (?)
-                    ?.replace(/\(&\)/g, '')  // Remove (&) caso exista
+                    ?.replace(/\(\?+\)/g, '') // Remove (?) ou (???)
+                    ?.replace(/\(&+\)/g, '')  // Remove (&) ou (&&&&)
                     ?.split('\n').map((line: string, i: number) => {
                     const isRef = line.toLowerCase().includes("referência") || 
                                   line.toLowerCase().includes("ref:") || 
                                   line.toLowerCase().includes("valor:") || 
-                                  line.toLowerCase().includes("vr:");
+                                  line.toLowerCase().includes("vr:") ||
+                                  line.toLowerCase().includes("normal:") ||
+                                  line.toLowerCase().includes("desejável:");
                     return (
                       <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
-                        {line.trim()}
+                        {line}
                       </Text>
                     );
                   })}
@@ -229,7 +240,6 @@ const Reports = () => {
           <p className="text-blue-300/50 text-sm mt-1 font-medium">Busque pacientes e gere PDFs oficiais dos atendimentos finalizados</p>
         </div>
 
-        {/* Barra de Busca */}
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">
           <div className="relative">
             <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
@@ -261,7 +271,6 @@ const Reports = () => {
           )}
         </div>
 
-        {/* Paciente Selecionado */}
         {selectedPatient && (
           <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6 flex items-center justify-between animate-in zoom-in duration-500">
             <div className="flex items-center gap-4">
@@ -277,7 +286,6 @@ const Reports = () => {
           </div>
         )}
 
-        {/* Lista de Atendimentos */}
         <div className="grid grid-cols-1 gap-4">
           {services.map((service) => (
             <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
@@ -286,14 +294,14 @@ const Reports = () => {
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-white font-bold uppercase text-sm">Atendimento de {format(new Date(service.created_at), "dd/MM/yyyy")}</h3>
+                  <h3 className="text-white font-bold uppercase text-sm">Atendimento de {formatSafeDate(service.created_at)}</h3>
                   <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">Registro: #{service.id.slice(0, 8).toUpperCase()}</p>
                 </div>
               </div>
               
               <PDFDownloadLink 
                 document={<LabReportPDF service={service} patient={selectedPatient} />} 
-                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${format(new Date(service.created_at), "ddMMyy")}.pdf`}
+                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${formatSafeDate(service.created_at).replace(/\//g, "")}.pdf`}
               >
                 {({ loading: pdfLoading }) => (
                   <Button 
