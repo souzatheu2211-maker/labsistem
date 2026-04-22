@@ -9,12 +9,10 @@ import {
   Loader2, 
   ChevronRight, 
   Save, 
+  X, 
   FlaskConical,
   Type,
-  RotateCcw,
-  LayoutTemplate,
-  AlertCircle,
-  RefreshCw
+  RotateCcw
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -30,14 +28,12 @@ const Results = () => {
   const [selectedService, setSelectedService] = useState<any>(null);
   const [selectedExam, setSelectedExam] = useState<any>(null);
   
-  // Estados do Editor e Modelos
-  const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+  // Estados do Editor
   const [template, setTemplate] = useState('');
   const [parameters, setParameters] = useState<string[]>([]);
   const [manualText, setManualText] = useState('');
   const [isManualMode, setIsManualMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   useEffect(() => {
     fetchPendingServices();
@@ -45,102 +41,67 @@ const Results = () => {
 
   const fetchPendingServices = async () => {
     setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('services')
-        .select(`
-          *,
-          patients (full_name, cpf),
-          service_exams (
-            id,
-            status,
-            result_value,
-            exam_id,
-            exams (name)
-          )
-        `)
-        .order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('services')
+      .select(`
+        *,
+        patients (full_name, cpf),
+        service_exams (
+          id,
+          status,
+          result_value,
+          exam_id,
+          exams (name)
+        )
+      `)
+      .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setServices(data || []);
-    } catch (err: any) {
-      showError("Erro ao carregar atendimentos: " + err.message);
-    } finally {
-      setLoading(false);
-    }
+    if (!error) setServices(data || []);
+    setLoading(false);
   };
 
-  // Função para extrair os nomes dos campos baseados no texto antes do (?)
+  // Função para extrair os rótulos próximos aos (?) para ajudar o usuário
   const getParamLabels = (text: string) => {
-    if (!text) return [];
     const parts = text.split('(?)');
     return parts.slice(0, -1).map(part => {
       const lines = part.trim().split('\n');
       const lastLine = lines[lines.length - 1].trim();
-      // Pega o nome do parâmetro (ex: "Hemoglobina: ")
-      const label = lastLine.split(/[:.]/).pop()?.trim() || lastLine.slice(-20).trim();
+      // Pega os últimos 20 caracteres ou o que vier depois de ":" ou "."
+      const label = lastLine.split(/[:.]/).pop()?.trim() || lastLine.slice(-15).trim();
       return label || "Valor";
     });
   };
 
-  const applyTemplate = (content: string) => {
-    setTemplate(content);
-    setManualText(content);
-    const count = (content.match(/\(\?\)/g) || []).length;
-    setParameters(new Array(count).fill(''));
-    setIsManualMode(count === 0);
-  };
-
-  const fetchTemplatesForExam = async (examId: string) => {
-    setLoadingTemplates(true);
-    try {
-      // Busca na tabela pre_reports filtrando pelo exam_id
-      const { data, error } = await supabase
-        .from('pre_reports')
-        .select('*')
-        .eq('exam_id', examId)
-        .order('name');
-
-      if (error) throw error;
-      setAvailableTemplates(data || []);
-      return data || [];
-    } catch (err: any) {
-      showError("Erro ao carregar pré-laudos: " + err.message);
-      return [];
-    } finally {
-      setLoadingTemplates(false);
-    }
-  };
-
   const handleSelectExam = async (se: any) => {
     setSelectedExam(se);
-    const templates = await fetchTemplatesForExam(se.exam_id);
+    setIsManualMode(!!se.result_value); // Se já tem resultado, entra em modo manual para edição direta
+    
+    // Buscar o modelo (pre-report)
+    const { data: preReport } = await supabase
+      .from('pre_reports')
+      .select('content')
+      .eq('exam_id', se.exam_id)
+      .maybeSingle();
+
+    const baseTemplate = preReport?.content || '';
+    setTemplate(baseTemplate);
 
     if (se.result_value) {
-      // Se já existe um resultado salvo, carrega ele no modo manual
       setManualText(se.result_value);
-      setTemplate('');
-      setParameters([]);
-      setIsManualMode(true);
-    } else if (templates && templates.length > 0) {
-      // Se não tem resultado mas tem modelos, aplica o primeiro automaticamente
-      applyTemplate(templates[0].content);
     } else {
-      // Se não tem nada, abre em branco no modo manual
-      setManualText('');
-      setTemplate('');
-      setParameters([]);
-      setIsManualMode(true);
+      setManualText(baseTemplate);
+      // Inicializar parâmetros vazios baseados na quantidade de (?)
+      const count = (baseTemplate.match(/\(\?\)/g) || []).length;
+      setParameters(new Array(count).fill(''));
     }
   };
 
-  // O laudo final é gerado em tempo real substituindo os (?) pelos valores dos inputs
+  // Monta o laudo final substituindo os (?) pelos parâmetros
   const finalReport = useMemo(() => {
     if (isManualMode) return manualText;
     
     let result = template;
     parameters.forEach(param => {
-      // Substitui apenas a primeira ocorrência de (?) a cada iteração
       result = result.replace('(?)', param || '___');
     });
     return result;
@@ -168,7 +129,7 @@ const Results = () => {
 
       showSuccess('Resultado salvo com sucesso!');
       
-      // Atualiza o estado local para refletir a mudança
+      // Atualizar estado local do serviço selecionado
       const updatedExams = selectedService.service_exams.map((se: any) => 
         se.id === selectedExam.id ? { ...se, status: 'finalizado', result_value: finalReport } : se
       );
@@ -310,53 +271,8 @@ const Results = () => {
               {selectedExam ? (
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                   
-                  {/* Coluna de Parâmetros e Modelos */}
-                  <div className="xl:col-span-1 space-y-6">
-                    {/* Seletor de Modelos */}
-                    <div className="bg-blue-950/40 border border-white/10 rounded-[2rem] p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
-                          <LayoutTemplate className="w-4 h-4" /> Modelos Disponíveis
-                        </h3>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => fetchTemplatesForExam(selectedExam.exam_id)}
-                          className="h-6 w-6 text-blue-400 hover:bg-blue-500/10"
-                        >
-                          <RefreshCw className={cn("w-3 h-3", loadingTemplates && "animate-spin")} />
-                        </Button>
-                      </div>
-                      
-                      {loadingTemplates ? (
-                        <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 text-blue-500 animate-spin" /></div>
-                      ) : (
-                        <div className="space-y-2">
-                          {availableTemplates.map((t) => (
-                            <button
-                              key={t.id}
-                              onClick={() => applyTemplate(t.content)}
-                              className={cn(
-                                "w-full p-3 rounded-xl border text-left transition-all group",
-                                template === t.content 
-                                  ? "bg-blue-600/20 border-blue-500 text-blue-100" 
-                                  : "bg-blue-900/10 border-white/5 text-blue-300/40 hover:border-blue-500/30"
-                              )}
-                            >
-                              <p className="text-[10px] font-bold uppercase tracking-tight">{t.name}</p>
-                            </button>
-                          ))}
-                          {availableTemplates.length === 0 && (
-                            <div className="flex flex-col items-center gap-2 py-4 opacity-30">
-                              <AlertCircle className="w-5 h-5" />
-                              <p className="text-[9px] font-bold uppercase text-center">Nenhum modelo para este exame</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Valores do Exame */}
+                  {/* Coluna de Parâmetros (Caixas Menores) */}
+                  <div className="xl:col-span-1 space-y-4">
                     <div className="bg-blue-950/40 border border-white/10 rounded-[2rem] p-6">
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Valores do Exame</h3>
@@ -378,7 +294,7 @@ const Results = () => {
                           </p>
                         </div>
                       ) : (
-                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                           {parameters.map((param, idx) => (
                             <div key={idx} className="space-y-1.5">
                               <label className="text-[9px] font-black text-blue-300/40 uppercase tracking-widest ml-1">
@@ -392,7 +308,7 @@ const Results = () => {
                               />
                             </div>
                           ))}
-                          {parameters.length === 0 && template && (
+                          {parameters.length === 0 && (
                             <p className="text-[10px] text-blue-300/20 font-bold uppercase text-center py-8">
                               Este modelo não possui campos automáticos.
                             </p>
@@ -402,7 +318,7 @@ const Results = () => {
                     </div>
                   </div>
 
-                  {/* Coluna do Laudo */}
+                  {/* Coluna do Laudo (Visualização/Edição Final) */}
                   <div className="xl:col-span-2 space-y-4">
                     <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col h-full">
                       <div className="bg-blue-900/20 border-b border-white/5 p-6 flex items-center justify-between">

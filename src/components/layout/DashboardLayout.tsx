@@ -8,12 +8,12 @@ import {
   PlusCircle, 
   ClipboardList, 
   FileCheck, 
+  Printer, 
   Settings, 
   LogOut,
   Search,
   ChevronLeft,
-  Menu,
-  Printer
+  Menu
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
