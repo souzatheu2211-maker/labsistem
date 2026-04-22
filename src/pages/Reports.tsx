@@ -97,7 +97,6 @@ const styles = StyleSheet.create({
     color: "#000000"
   },
 
-  // 🔥 IGUAL AO WORD
   pageTitle: {
     fontSize: 14,
     fontFamily: "Times-Bold",
@@ -129,17 +128,16 @@ const styles = StyleSheet.create({
     paddingLeft: 4
   },
 
-  rinTable: {
+  // TABELA DO RIN
+  rinTableRow: {
     flexDirection: "row",
-    marginTop: 2,
-    marginBottom: 2
+    marginBottom: 1
   },
   rinCol: {
     width: "25%",
     paddingRight: 4
   },
 
-  // 🔥 IGUAL AO WORD
   resultText: {
     fontSize: 12,
     fontFamily: "Times-Bold"
@@ -166,7 +164,13 @@ const cleanGarbage = (text: string) => {
     .trim();
 };
 
-const renderHTMLContent = (html: string) => {
+const splitIntoColumns4 = (line: string) => {
+  const parts = line.split(/\s{5,}/).map((p) => cleanGarbage(p));
+  const cols = [parts[0] || "", parts[1] || "", parts[2] || "", parts[3] || ""];
+  return cols;
+};
+
+const renderHTMLContent = (html: string, examName: string) => {
   if (!html) return null;
 
   const cleanHtml = html
@@ -179,6 +183,10 @@ const renderHTMLContent = (html: string) => {
     .replace(/<\/span>/g, "");
 
   const lines = cleanHtml.split("\n");
+  const examUpper = (examName || "").trim().toUpperCase();
+
+  // DETECTA BLOCO DO RIN NO COAGULOGRAMA
+  let rinMode = false;
 
   return lines.map((line, i) => {
     let trimmedLine = line.trim();
@@ -188,7 +196,6 @@ const renderHTMLContent = (html: string) => {
     if (!trimmedLine) return <View key={i} style={{ height: 6 }} />;
 
     trimmedLine = trimmedLine.replace(/[\u200B-\u200D\uFEFF]/g, "");
-
     const upper = trimmedLine.toUpperCase();
 
     const isRefLine =
@@ -234,7 +241,40 @@ const renderHTMLContent = (html: string) => {
       upper.includes("ATAQUE ISQUEMICO") ||
       upper.includes("VÁLVULAS") ||
       upper.includes("VALVULAS") ||
-      upper.includes("ENXERTOS");
+      upper.includes("ENXERTOS") ||
+      upper.includes("FAIXA TERAPÊUTICA") ||
+      upper.includes("FAIXA TERAPEUTICA") ||
+      upper.includes("DESEJÁVEL");
+
+    // ATIVA MODO RIN NO COAGULOGRAMA
+    if (examUpper === "COAGULOGRAMA" && upper.startsWith("RIN:")) {
+      rinMode = true;
+    }
+
+    // SE ESTÁ NO BLOCO DO RIN, TRANSFORMA EM TABELA 4 COLUNAS
+    if (examUpper === "COAGULOGRAMA" && rinMode) {
+      // Sai do modo se encontrar uma nova seção
+      if (
+        upper.startsWith("MATERIAL:") ||
+        upper.startsWith("TEMPO DE TROMBOPLASTINA") ||
+        upper.startsWith("TEMPO DE SANGRAMENTO") ||
+        upper.startsWith("TEMPO DE COAGULAÇÃO")
+      ) {
+        rinMode = false;
+      } else {
+        const cols = splitIntoColumns4(trimmedLine);
+
+        return (
+          <View key={i} style={styles.rinTableRow}>
+            {cols.map((col, idx) => (
+              <View key={idx} style={styles.rinCol}>
+                <Text style={styles.refText}>{col}</Text>
+              </View>
+            ))}
+          </View>
+        );
+      }
+    }
 
     const isMainResultLine =
       trimmedLine.includes(":") &&
@@ -245,47 +285,6 @@ const renderHTMLContent = (html: string) => {
 
     const hasTab = trimmedLine.includes("\t");
     const hasMultiSpaceColumns = /\s{5,}/.test(trimmedLine);
-
-    // FORMATAÇÃO ESPECIAL DO RIN (COAGULOGRAMA)
-    if (upper.startsWith("RIN: 0,8") || upper.includes("= PROFILAXIA DE TVP")) {
-      const cols = trimmedLine.split(/\s{5,}/);
-
-      return (
-        <View key={i} style={styles.rinTable}>
-          {cols.slice(0, 4).map((col, idx) => (
-            <View key={idx} style={styles.rinCol}>
-              <Text style={styles.refText}>{cleanGarbage(col)}</Text>
-            </View>
-          ))}
-        </View>
-      );
-    }
-
-    if (
-      upper.startsWith("DESEJÁVEL") ||
-      upper.startsWith("DESEJAVEL") ||
-      upper.includes("CIRURGIA DE ALTO RISCO") ||
-      upper.includes("EMBOLIA PULMONAR") ||
-      upper.includes("INFARTO DO MIOCÁRDIO") ||
-      upper.includes("INFARTO DO MIOCARDIO") ||
-      upper.includes("ATAQUE ISQUÊMICO") ||
-      upper.includes("ATAQUE ISQUEMICO") ||
-      upper.includes("ENXERTOS") ||
-      upper.includes("VÁLVULAS") ||
-      upper.includes("VALVULAS")
-    ) {
-      const cols = trimmedLine.split(/\s{5,}/);
-
-      return (
-        <View key={i} style={styles.rinTable}>
-          {cols.slice(0, 4).map((col, idx) => (
-            <View key={idx} style={styles.rinCol}>
-              <Text style={styles.refText}>{cleanGarbage(col)}</Text>
-            </View>
-          ))}
-        </View>
-      );
-    }
 
     if (isMainResultLine) {
       const [left, ...rest] = trimmedLine.split(":");
@@ -463,7 +462,7 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
 
             {examsInGroup.map((se: any) => (
               <View key={se.id} style={styles.examBlock} wrap={false}>
-                {renderHTMLContent(se.result_value || "")}
+                {renderHTMLContent(se.result_value || "", se.exams?.name || "")}
               </View>
             ))}
           </Page>
