@@ -7,7 +7,6 @@ import {
   Users, 
   PlusCircle, 
   ClipboardList, 
-  FileCheck, 
   Settings, 
   LogOut,
   Search,
@@ -75,7 +74,6 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           <SidebarItem icon={Users} label="Pacientes" to="/pacientes" active={location.pathname === '/pacientes'} collapsed={isCollapsed} />
           <SidebarItem icon={PlusCircle} label="Novo Atendimento" to="/novo-atendimento" active={location.pathname === '/novo-atendimento'} collapsed={isCollapsed} />
           <SidebarItem icon={ClipboardList} label="Rotina Diária" to="/rotina" active={location.pathname === '/rotina'} collapsed={isCollapsed} />
-          <SidebarItem icon={FileCheck} label="Resultados" to="/resultados" active={location.pathname === '/resultados'} collapsed={isCollapsed} />
           <SidebarItem icon={Printer} label="Impressão" to="/impressao" active={location.pathname === '/impressao'} collapsed={isCollapsed} />
           <div className={cn("h-[1px] bg-white/5 my-4 mx-2", isCollapsed && "mx-0")}></div>
           <SidebarItem icon={Settings} label="Configurações" to="/config" active={location.pathname.startsWith('/config')} collapsed={isCollapsed} />
