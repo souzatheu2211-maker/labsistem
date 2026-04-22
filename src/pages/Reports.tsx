@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
     paddingTop: 170,    
     paddingBottom: 80,  
     paddingHorizontal: 50,
-    fontFamily: 'Courier', 
+    fontFamily: 'Helvetica', 
     backgroundColor: '#ffffff',
   },
   background: {
@@ -80,25 +80,58 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textTransform: 'uppercase',
   },
-  resultText: {
+  htmlLine: {
     fontSize: 10,
-    fontFamily: 'Courier', 
-    lineHeight: 1.2,
-    color: '#000000',
-    minHeight: 10, // Garante que linhas vazias ocupem espaço
+    marginBottom: 2,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  boldText: {
+    fontFamily: 'Helvetica-Bold',
+  },
+  normalText: {
+    fontFamily: 'Helvetica',
   }
 });
 
-const formatFinalReport = (text: string) => {
-  if (!text) return [];
-  // Divide por quebra de linha e remove apenas os placeholders de preenchimento remanescentes
-  return text.split('\n').map(line => {
-    return line.replace(/\(\?\)/g, '').replace(/\(\s*[?&]\s*\)/g, '');
+// Função simples para converter HTML básico em componentes PDF
+const renderHTMLContent = (html: string) => {
+  if (!html) return null;
+
+  // Remove tags que não sejam <b>, <strong>, <p>, <br> ou <div>
+  // E divide por blocos de parágrafo/linha
+  const cleanHtml = html
+    .replace(/<p>/g, '')
+    .replace(/<\/p>/g, '\n')
+    .replace(/<br\s*\/?>/g, '\n')
+    .replace(/<div>/g, '')
+    .replace(/<\/div>/g, '\n');
+
+  const lines = cleanHtml.split('\n');
+
+  return lines.map((line, i) => {
+    if (!line.trim()) return <Text key={i} style={{ height: 10 }}>{" "}</Text>;
+
+    // Processa negritos na linha
+    const parts = line.split(/(<b>.*?<\/b>|<strong>.*?<\/strong>)/g);
+    
+    return (
+      <View key={i} style={styles.htmlLine}>
+        {parts.map((part, j) => {
+          const isBold = part.startsWith('<b>') || part.startsWith('<strong>');
+          const text = part.replace(/<[^>]*>/g, '');
+          return (
+            <Text key={j} style={isBold ? styles.boldText : styles.normalText}>
+              {text}
+            </Text>
+          );
+        })}
+      </View>
+    );
   });
 };
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
-  // Agrupa e ordena os exames com base nos dados do banco (pre_reports)
   const sortedExams = [...(service.service_exams || [])].sort((a, b) => {
     const orderA = a.exams?.pre_reports?.[0]?.order_index ?? 999;
     const orderB = b.exams?.pre_reports?.[0]?.order_index ?? 999;
@@ -126,11 +159,7 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
         {sortedExams.map((se: any) => (
           <View key={se.id} style={styles.examBlock} wrap={false}>
             <Text style={styles.examName}>{se.exams?.name}</Text>
-            {formatFinalReport(se.result_value || "").map((line: string, i: number) => (
-              <Text key={i} style={styles.resultText}>
-                {line || " "} 
-              </Text>
-            ))}
+            {renderHTMLContent(se.result_value || "")}
           </View>
         ))}
       </Page>
@@ -157,13 +186,6 @@ const Reports = () => {
   useEffect(() => {
     if (selectedPatient) {
       fetchPatientServices(selectedPatient.id);
-
-      const channel = supabase
-        .channel('reports-update')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'services', filter: `patient_id=eq.${selectedPatient.id}` }, () => fetchPatientServices(selectedPatient.id))
-        .subscribe();
-
-      return () => { supabase.removeChannel(channel); };
     }
   }, [selectedPatient]);
 

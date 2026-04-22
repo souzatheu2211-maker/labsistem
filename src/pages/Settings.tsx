@@ -14,7 +14,9 @@ import {
   Loader2,
   Search,
   Save,
-  X
+  X,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,8 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import { cn } from '@/lib/utils';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 const SettingsPage = () => {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -45,15 +49,15 @@ const SettingsPage = () => {
   const [preReports, setPreReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Estados para Pré-Laudos
-  const [searchPreReport, setSearchPreReport] = useState('');
-  const [selectedPreReport, setSelectedPreReport] = useState<any>(null);
+  const [searchExam, setSearchExam] = useState('');
+  const [selectedExam, setSelectedExam] = useState<any>(null);
   const [editContent, setEditContent] = useState('');
 
   // Estados dos formulários
   const [newExam, setNewExam] = useState({ name: '', code: '', description: '' });
-  const [newPreReport, setNewPreReport] = useState({ name: '', content: '', exam_id: '' });
 
   useEffect(() => {
     fetchAllData();
@@ -65,7 +69,7 @@ const SettingsPage = () => {
       const [empRes, examRes, preRes] = await Promise.all([
         supabase.from('profiles').select('*').order('first_name'),
         supabase.from('exams').select('*').order('name'),
-        supabase.from('pre_reports').select('*, exams(name)').order('name')
+        supabase.from('pre_reports').select('*')
       ]);
       
       setEmployees(empRes.data || []);
@@ -78,23 +82,37 @@ const SettingsPage = () => {
     }
   };
 
-  const handleSelectPreReport = (report: any) => {
-    setSelectedPreReport(report);
-    setEditContent(report.content);
-    setSearchPreReport('');
+  const handleSelectExam = (exam: any) => {
+    setSelectedExam(exam);
+    const existingReport = preReports.find(r => r.exam_id === exam.id);
+    setEditContent(existingReport?.content || '');
+    setSearchExam('');
   };
 
-  const handleUpdatePreReport = async () => {
-    if (!selectedPreReport) return;
+  const handleSavePreReport = async () => {
+    if (!selectedExam) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('pre_reports')
-        .update({ content: editContent })
-        .eq('id', selectedPreReport.id);
+      const existingReport = preReports.find(r => r.exam_id === selectedExam.id);
+      
+      if (existingReport) {
+        const { error } = await supabase
+          .from('pre_reports')
+          .update({ content: editContent })
+          .eq('id', existingReport.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('pre_reports')
+          .insert([{ 
+            name: selectedExam.name, 
+            content: editContent, 
+            exam_id: selectedExam.id 
+          }]);
+        if (error) throw error;
+      }
 
-      if (error) throw error;
-      showSuccess('Modelo de laudo atualizado com sucesso!');
+      showSuccess('Modelo de laudo salvo com sucesso!');
       fetchAllData();
     } catch (error: any) {
       showError(error.message);
@@ -119,38 +137,80 @@ const SettingsPage = () => {
     }
   };
 
-  const handleCreatePreReport = async () => {
-    if (!newPreReport.name || !newPreReport.exam_id) return showError('Nome e Exame são obrigatórios.');
-    setSubmitting(true);
+  const handleDeleteExam = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este exame? Isso removerá também o modelo de laudo vinculado.')) return;
     try {
-      const { error } = await supabase.from('pre_reports').insert([newPreReport]);
+      const { error } = await supabase.from('exams').delete().eq('id', id);
       if (error) throw error;
-      showSuccess('Modelo de pré-laudo cadastrado!');
-      setNewPreReport({ name: '', content: '', exam_id: '' });
-      fetchAllData();
-    } catch (error: any) {
-      showError(error.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (table: string, id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este item?')) return;
-    try {
-      const { error } = await supabase.from(table).delete().eq('id', id);
-      if (error) throw error;
-      showSuccess('Item removido com sucesso.');
-      if (selectedPreReport?.id === id) setSelectedPreReport(null);
+      showSuccess('Exame removido.');
+      if (selectedExam?.id === id) setSelectedExam(null);
       fetchAllData();
     } catch (error: any) {
       showError(error.message);
     }
   };
 
-  const filteredPreReports = preReports.filter(r => 
-    r.name.toLowerCase().includes(searchPreReport.toLowerCase()) ||
-    r.exams?.name.toLowerCase().includes(searchPreReport.toLowerCase())
+  const filteredExams = exams.filter(e => 
+    e.name.toLowerCase().includes(searchExam.toLowerCase())
+  );
+
+  const quillModules = {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline'],
+      [{ 'size': ['small', false, 'large', 'huge'] }],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['clean']
+    ],
+  };
+
+  const EditorComponent = () => (
+    <div className={cn(
+      "bg-blue-950/40 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col",
+      isExpanded ? "fixed inset-4 z-[100] bg-blue-950" : "h-full"
+    )}>
+      <div className="bg-blue-900/20 border-b border-white/5 p-6 flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-white uppercase tracking-tight">{selectedExam.name}</h3>
+          <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Editor de Modelo Base</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="ghost" 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-blue-300/40 hover:text-white gap-2 font-bold uppercase text-[10px]"
+          >
+            {isExpanded ? <><Minimize2 className="w-4 h-4" /> Minimizar</> : <><Maximize2 className="w-4 h-4" /> Expandir</>}
+          </Button>
+          {!isExpanded && (
+            <Button 
+              variant="ghost" 
+              onClick={() => setSelectedExam(null)}
+              className="text-blue-300/40 hover:text-white gap-2 font-bold uppercase text-[10px]"
+            >
+              <X className="w-4 h-4" /> Fechar
+            </Button>
+          )}
+          <Button 
+            onClick={handleSavePreReport}
+            disabled={submitting}
+            className="bg-emerald-600 hover:bg-emerald-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-6"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Salvar Modelo</>}
+          </Button>
+        </div>
+      </div>
+      <div className="flex-grow p-4 bg-white text-black overflow-hidden flex flex-col">
+        <ReactQuill 
+          theme="snow" 
+          value={editContent} 
+          onChange={setEditContent}
+          modules={quillModules}
+          className="flex-grow overflow-y-auto"
+          placeholder="Digite o modelo do laudo aqui... Use (?) para campos que serão preenchidos depois."
+        />
+      </div>
+    </div>
   );
 
   return (
@@ -177,148 +237,55 @@ const SettingsPage = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* ABA PRÉ-LAUDOS (REFORMULADA) */}
           <TabsContent value="pre-reports" className="animate-in fade-in slide-in-from-top duration-500">
-            <div className="space-y-6">
-              {/* Barra de Pesquisa */}
-              <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-6 backdrop-blur-sm relative z-30">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest">Buscar Modelo de Laudo</h3>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" className="text-blue-400 hover:text-blue-300 text-[10px] font-black uppercase gap-2">
-                        <Plus className="w-4 h-4" /> Novo Modelo
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-blue-950 border-white/10 text-white max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle className="uppercase tracking-widest font-black text-blue-400">Criar Modelo de Laudo</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase text-blue-300/50">Vincular ao Exame</label>
-                          <Select onValueChange={val => setNewPreReport({...newPreReport, exam_id: val})}>
-                            <SelectTrigger className="bg-blue-900/20 border-white/10 rounded-xl">
-                              <SelectValue placeholder="Selecione o exame..." />
-                            </SelectTrigger>
-                            <SelectContent className="bg-blue-950 border-white/10 text-white">
-                              {exams.map(e => (
-                                <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase text-blue-300/50">Nome do Modelo</label>
-                          <Input 
-                            value={newPreReport.name} 
-                            onChange={e => setNewPreReport({...newPreReport, name: e.target.value})}
-                            placeholder="Ex: Hemograma Padrão"
-                            className="bg-blue-900/20 border-white/10 rounded-xl" 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase text-blue-300/50">Conteúdo do Laudo (Template)</label>
-                          <Textarea 
-                            value={newPreReport.content} 
-                            onChange={e => setNewPreReport({...newPreReport, content: e.target.value})}
-                            placeholder="Digite o texto base do laudo aqui..."
-                            className="bg-blue-900/20 border-white/10 rounded-xl min-h-[200px] resize-none" 
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button onClick={handleCreatePreReport} disabled={submitting} className="bg-blue-600 hover:bg-blue-500 w-full rounded-xl font-bold uppercase text-xs">
-                          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Modelo'}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-                <div className="relative">
-                  <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
-                  <Input 
-                    placeholder="Digite o nome do exame ou modelo..." 
-                    className="bg-blue-900/20 border-blue-500/10 h-12 pl-12 rounded-2xl text-white font-bold"
-                    value={searchPreReport}
-                    onChange={(e) => setSearchPreReport(e.target.value)}
-                    autoFocus
-                  />
-                  
-                  {searchPreReport && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-blue-950 border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto z-50">
-                      {filteredPreReports.length > 0 ? (
-                        filteredPreReports.map(report => (
-                          <button
-                            key={report.id}
-                            onClick={() => handleSelectPreReport(report)}
-                            className="w-full text-left px-6 py-4 hover:bg-blue-900/40 border-b border-white/5 last:border-none transition-colors group"
-                          >
-                            <p className="text-sm font-bold text-white uppercase">{report.name}</p>
-                            <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">{report.exams?.name}</p>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-6 py-4 text-blue-300/30 text-xs font-bold uppercase">Nenhum modelo encontrado</div>
-                      )}
-                    </div>
-                  )}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Lista de Exames para Seleção */}
+              <div className="lg:col-span-4 space-y-4">
+                <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-6 backdrop-blur-sm">
+                  <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Selecione um Exame</h3>
+                  <div className="relative mb-4">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-blue-300/30" />
+                    <Input 
+                      placeholder="Filtrar exames..." 
+                      className="bg-blue-900/20 border-blue-500/10 h-10 pl-10 rounded-xl text-white text-xs"
+                      value={searchExam}
+                      onChange={(e) => setSearchExam(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                    {filteredExams.map(exam => (
+                      <button
+                        key={exam.id}
+                        onClick={() => handleSelectExam(exam)}
+                        className={cn(
+                          "w-full text-left px-4 py-3 rounded-xl border transition-all group",
+                          selectedExam?.id === exam.id 
+                            ? "bg-blue-600 border-blue-400 text-white shadow-lg" 
+                            : "bg-blue-900/10 border-white/5 text-blue-300/60 hover:border-blue-500/30"
+                        )}
+                      >
+                        <p className="text-[10px] font-black uppercase tracking-tight">{exam.name}</p>
+                        <p className="text-[8px] opacity-50 font-bold uppercase">{preReports.some(r => r.exam_id === exam.id) ? 'Modelo Configurado' : 'Sem Modelo'}</p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* Editor de Visualização */}
-              {selectedPreReport ? (
-                <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in fade-in duration-500">
-                  <div className="bg-blue-900/20 border-b border-white/5 p-6 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-bold text-white uppercase tracking-tight">{selectedPreReport.name}</h3>
-                      <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Editando Modelo Base</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => setSelectedPreReport(null)}
-                        className="text-blue-300/40 hover:text-white gap-2 font-bold uppercase text-[10px]"
-                      >
-                        <X className="w-4 h-4" /> Fechar
-                      </Button>
-                      <Button 
-                        onClick={handleUpdatePreReport}
-                        disabled={submitting}
-                        className="bg-emerald-600 hover:bg-emerald-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-6"
-                      >
-                        {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Salvar Alterações</>}
-                      </Button>
-                    </div>
+              {/* Editor */}
+              <div className="lg:col-span-8">
+                {selectedExam ? (
+                  <EditorComponent />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[600px] opacity-20 border-2 border-dashed border-white/5 rounded-[2.5rem]">
+                    <FileText className="w-16 h-16 mb-4" />
+                    <p className="font-bold uppercase tracking-widest text-sm">Selecione um exame ao lado para editar seu laudo</p>
                   </div>
-                  <div className="p-8">
-                    <Textarea 
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      className="bg-black/20 border-white/5 min-h-[500px] rounded-2xl text-blue-50 font-mono text-sm p-6 resize-none focus:ring-blue-500/30 leading-relaxed"
-                      placeholder="Conteúdo do laudo..."
-                    />
-                    <div className="mt-4 flex justify-end">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleDelete('pre_reports', selectedPreReport.id)}
-                        className="text-red-400/40 hover:text-red-400 hover:bg-red-500/10 gap-2 font-bold uppercase text-[10px]"
-                      >
-                        <Trash2 className="w-4 h-4" /> Excluir este Modelo
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-32 opacity-20 border-2 border-dashed border-white/5 rounded-[2.5rem]">
-                  <FileText className="w-16 h-16 mb-4" />
-                  <p className="font-bold uppercase tracking-widest text-sm">Selecione um modelo acima para visualizar ou editar</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </TabsContent>
 
-          {/* ABA EXAMES */}
           <TabsContent value="exams" className="animate-in fade-in slide-in-from-top duration-500">
             <div className="bg-blue-950/30 border border-white/5 rounded-[2.5rem] p-8 backdrop-blur-sm">
               <div className="flex justify-between items-center mb-8">
@@ -381,7 +348,7 @@ const SettingsPage = () => {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        onClick={() => handleDelete('exams', exam.id)}
+                        onClick={() => handleDeleteExam(exam.id)}
                         className="text-red-400/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -393,7 +360,6 @@ const SettingsPage = () => {
             </div>
           </TabsContent>
 
-          {/* ABA FUNCIONÁRIOS */}
           <TabsContent value="employees" className="animate-in fade-in slide-in-from-top duration-500">
             <div className="bg-blue-950/30 border border-white/5 rounded-[2.5rem] p-8 backdrop-blur-sm">
               <div className="flex justify-between items-center mb-8">

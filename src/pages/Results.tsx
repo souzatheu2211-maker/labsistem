@@ -32,7 +32,6 @@ const Results = () => {
   useEffect(() => {
     fetchServices();
 
-    // Realtime: Atualiza a fila quando houver mudanças em atendimentos ou exames
     const channel = supabase
       .channel('results-queue')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, () => fetchServices())
@@ -65,7 +64,6 @@ const Results = () => {
       if (error) throw error;
       setServices(data || []);
       
-      // Se houver um serviço selecionado, atualiza os dados dele também
       if (selectedService) {
         const updated = data?.find(s => s.id === selectedService.id);
         if (updated) setSelectedService(updated);
@@ -77,8 +75,10 @@ const Results = () => {
     }
   };
 
-  const getFieldLabels = (text: string) => {
-    if (!text) return [];
+  const getFieldLabels = (html: string) => {
+    if (!html) return [];
+    // Remove tags HTML para extrair os labels
+    const text = html.replace(/<[^>]*>/g, ' ');
     const parts = text.split('(?)');
     return parts.slice(0, -1).map(part => {
       const lines = part.trim().split('\n');
@@ -123,7 +123,6 @@ const Results = () => {
     if (!selectedExam || !selectedService) return;
     setIsSaving(true);
     try {
-      // 1. Atualizar o exame individual
       const { error: examError } = await supabase
         .from('service_exams')
         .update({ 
@@ -135,7 +134,6 @@ const Results = () => {
 
       if (examError) throw examError;
 
-      // 2. Buscar status atualizado de todos os exames do atendimento
       const { data: allExams } = await supabase
         .from('service_exams')
         .select('status')
@@ -144,15 +142,14 @@ const Results = () => {
       const allFinished = allExams?.every(e => e.status === 'finalizado');
 
       if (allFinished) {
-        // 3. Finalizar o atendimento global
         await supabase
           .from('services')
           .update({ status: 'finalizado' })
           .eq('id', selectedService.id);
         
-        showSuccess('Atendimento finalizado e pronto para impressão!');
+        showSuccess('Atendimento finalizado!');
       } else {
-        showSuccess('Resultado salvo com sucesso!');
+        showSuccess('Resultado salvo!');
       }
 
       setSelectedExam(null);
@@ -251,12 +248,12 @@ const Results = () => {
                       {isSaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5" /> Salvar Resultado</>}
                     </Button>
                   </div>
-                  <div className="bg-blue-950/60 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col">
-                    <div className="bg-blue-900/30 border-b border-white/5 p-8">
-                      <h3 className="text-lg font-bold text-white uppercase tracking-tight">{selectedExam.exams?.name}</h3>
+                  <div className="bg-white border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col">
+                    <div className="bg-gray-100 border-b border-gray-200 p-8">
+                      <h3 className="text-lg font-bold text-black uppercase tracking-tight">{selectedExam.exams?.name}</h3>
                     </div>
-                    <div className="p-10 flex-grow bg-black/30">
-                      <div className="w-full h-full text-blue-50 font-mono text-sm leading-relaxed whitespace-pre-wrap opacity-80">{previewContent}</div>
+                    <div className="p-10 flex-grow bg-white text-black">
+                      <div className="w-full h-full font-mono text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: previewContent }} />
                     </div>
                   </div>
                 </div>
