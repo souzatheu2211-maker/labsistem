@@ -37,13 +37,13 @@ const formatSafeDate = (dateStr: string) => {
   return format(parseISO(dateStr), "dd/MM/yyyy");
 };
 
-// Configuração de Estilos para o PDF (A4)
+// Configuração de Estilos para o PDF (A4) - Focado em Times e Minimalismo
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 170,    
-    paddingBottom: 80,  
+    paddingTop: 160,    
+    paddingBottom: 60,  
     paddingHorizontal: 50,
-    fontFamily: 'Helvetica',
+    fontFamily: 'Times-Roman',
     backgroundColor: '#ffffff',
   },
   background: {
@@ -55,53 +55,55 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: 'absolute',
-    top: 115, 
+    top: 110, 
     left: 50,
     right: 50,
-    borderBottomWidth: 1,
-    borderBottomColor: '#000',
-    paddingBottom: 10,
+    paddingBottom: 15,
+    // Linha removida conforme solicitado
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   label: {
-    fontSize: 13, 
-    fontWeight: 'bold',
+    fontSize: 11, 
+    fontFamily: 'Times-Bold',
+    textTransform: 'uppercase',
   },
   value: {
-    fontSize: 13, 
+    fontSize: 11, 
+    fontFamily: 'Times-Roman',
   },
   sectorTitle: {
-    fontSize: 12,
+    fontSize: 11,
     textAlign: 'center',
-    textDecoration: 'underline',
-    marginTop: 15,
-    marginBottom: 12,
+    marginTop: 20,
+    marginBottom: 10,
     textTransform: 'uppercase',
-    fontWeight: 'bold',
+    fontFamily: 'Times-Bold',
+    textDecoration: 'underline',
   },
   examBlock: {
-    marginBottom: 25, 
+    marginBottom: 20, 
   },
   examName: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 6,
+    fontSize: 11,
+    fontFamily: 'Times-Bold',
+    marginBottom: 5,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 11, // Ajustado para 11 em Courier para não estourar a margem, mas manter o alinhamento
-    fontFamily: 'Courier', // Fonte monoespaçada preserva os espaços e pontos de alinhamento
-    lineHeight: 1.2,
+    fontSize: 10.5,
+    fontFamily: 'Times-Roman',
+    lineHeight: 1.3,
     color: '#000000',
+    whiteSpace: 'pre-wrap',
   },
   referenceText: {
     fontSize: 9, 
-    fontFamily: 'Courier',
-    color: '#333333',
+    fontFamily: 'Times-Italic',
+    color: '#222222',
     marginTop: 2,
   }
 });
@@ -111,12 +113,11 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   
   const getSector = (examName: string) => {
     const name = examName.toUpperCase();
-    if (name.includes("HEMOGRAMA") || name.includes("SANGUE")) return "HEMATOLOGIA";
-    if (name.includes("GLICOSE") || name.includes("GLICEMIA") || name.includes("COLESTEROL") || name.includes("TRIGLI") || name.includes("UREIA") || name.includes("CREATININA") || name.includes("TGO") || name.includes("TGP") || name.includes("HBA1C") || name.includes("GLICADA")) return "BIOQUÍMICA";
+    if (name.includes("HEMOGRAMA") || name.includes("SANGUE") || name.includes("VHS") || name.includes("COAGULO")) return "HEMATOLOGIA";
+    if (name.includes("GLICOSE") || name.includes("GLICEMIA") || name.includes("COLESTEROL") || name.includes("TRIGLI") || name.includes("UREIA") || name.includes("CREATININA") || name.includes("TGO") || name.includes("TGP") || name.includes("GAMA") || name.includes("ALBUMINA") || name.includes("URICO") || name.includes("CALCIO") || name.includes("FERRO") || name.includes("FOSFATASE") || name.includes("FOSFORO") || name.includes("CPK") || name.includes("CK") || name.includes("PROTEINA") || name.includes("BILIRRUBINA")) return "BIOQUÍMICA";
     if (name.includes("URINA") || name.includes("EAS")) return "URINÁLISE";
     if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
-    if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
-    return "HEMATOLOGIA";
+    return "IMUNOLOGIA / HORMÔNIOS";
   };
 
   const groups: { [key: string]: any[] } = {};
@@ -155,8 +156,8 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
                   {se.result_value
-                    ?.replace(/\(\?+\)/g, '') // Remove (?) ou (???)
-                    ?.replace(/\(&+\)/g, '')  // Remove (&) ou (&&&&)
+                    ?.replace(/\(\?+\)/g, '') 
+                    ?.replace(/\(&+\)/g, '')  
                     ?.split('\n').map((line: string, i: number) => {
                     const isRef = line.toLowerCase().includes("referência") || 
                                   line.toLowerCase().includes("ref:") || 
