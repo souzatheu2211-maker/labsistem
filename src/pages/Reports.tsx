@@ -37,10 +37,10 @@ const formatSafeDate = (dateStr: string) => {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 160,    
+    paddingTop: 180,    
     paddingBottom: 60,  
-    paddingHorizontal: 45,
-    fontFamily: 'Helvetica', 
+    paddingHorizontal: 50,
+    fontFamily: 'Times-Roman', 
     backgroundColor: '#ffffff',
   },
   background: {
@@ -52,52 +52,53 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: 'absolute',
-    top: 110, 
-    left: 45,
-    right: 45,
+    top: 125, 
+    left: 50,
+    right: 50,
     borderBottom: 1,
-    borderBottomColor: '#eeeeee',
-    paddingBottom: 8,
+    borderBottomColor: '#000000',
+    paddingBottom: 10,
   },
   patientRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 15,
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   label: {
-    fontSize: 9, 
-    fontFamily: 'Helvetica-Bold',
-    color: '#333333',
+    fontSize: 12, 
+    fontFamily: 'Times-Bold',
+    color: '#000000',
   },
   value: {
-    fontSize: 9, 
-    fontFamily: 'Helvetica',
+    fontSize: 12, 
+    fontFamily: 'Times-Roman',
     color: '#000000',
   },
   examBlock: {
-    marginBottom: 15, 
+    marginBottom: 20, 
   },
   htmlLine: {
-    fontSize: 10,
-    marginBottom: 3,
+    marginBottom: 4,
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'baseline',
   },
-  boldText: {
-    fontFamily: 'Helvetica-Bold',
+  resultText: {
+    fontSize: 12,
+    fontFamily: 'Times-Bold',
   },
   normalText: {
-    fontFamily: 'Helvetica',
+    fontSize: 11,
+    fontFamily: 'Times-Roman',
   },
   refText: {
     fontSize: 8,
-    color: '#666666',
-    fontFamily: 'Helvetica',
+    color: '#333333',
+    fontFamily: 'Times-Roman',
+    marginTop: 2,
   }
 });
 
-// Função para converter HTML básico em componentes PDF com regras de estilo
 const renderHTMLContent = (html: string) => {
   if (!html) return null;
 
@@ -111,7 +112,15 @@ const renderHTMLContent = (html: string) => {
   const lines = cleanHtml.split('\n');
 
   return lines.map((line, i) => {
-    if (!line.trim()) return <View key={i} style={{ height: 6 }} />;
+    const trimmedLine = line.trim();
+    if (!trimmedLine) return <View key={i} style={{ height: 8 }} />;
+
+    // Identifica se a linha é de referência
+    const isRefLine = 
+      trimmedLine.toUpperCase().includes('VALOR DE REFERÊNCIA') || 
+      trimmedLine.toUpperCase().includes('NORMAL') || 
+      trimmedLine.toUpperCase().includes('ALTERADA') ||
+      trimmedLine.toUpperCase().includes('REF:');
 
     // Divide a linha para identificar partes em negrito
     const parts = line.split(/(<b>.*?<\/b>|<strong>.*?<\/strong>)/g);
@@ -122,17 +131,16 @@ const renderHTMLContent = (html: string) => {
           const isBold = part.startsWith('<b>') || part.startsWith('<strong>');
           let text = part.replace(/<[^>]*>/g, '');
           
-          // Regra: Se o texto contém "Ref:" ou parece um valor de referência, diminui a fonte
-          const isRef = text.toLowerCase().includes('ref:') || text.toLowerCase().includes('valor de referência');
+          let textStyle = styles.normalText;
+          
+          if (isRefLine) {
+            textStyle = styles.refText;
+          } else if (isBold) {
+            textStyle = styles.resultText;
+          }
           
           return (
-            <Text 
-              key={j} 
-              style={[
-                isBold ? styles.boldText : styles.normalText,
-                isRef ? styles.refText : null
-              ]}
-            >
+            <Text key={j} style={textStyle}>
               {text}
             </Text>
           );
@@ -156,14 +164,14 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
       <Page size="A4" style={styles.page}>
         <Image src={timbreUrl} style={styles.background} fixed />
         
-        {/* Cabeçalho Compacto */}
+        {/* Cabeçalho Ajustado e Centralizado */}
         <View style={styles.patientInfoFixed} fixed>
           <View style={styles.patientRow}>
             <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
-            <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
             <Text style={styles.label}>DN: <Text style={styles.value}>{formatSafeDate(patient.birth_date)}</Text></Text>
           </View>
-          <View style={[styles.patientRow, { marginTop: 4 }]}>
+          <View style={styles.patientRow}>
+            <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
             <Text style={styles.label}>DATA: <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text></Text>
             <Text style={styles.label}>REGISTRO: <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
           </View>
@@ -172,7 +180,6 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
         {/* Conteúdo dos Exames */}
         {sortedExams.map((se: any) => (
           <View key={se.id} style={styles.examBlock} wrap={false}>
-            {/* Título do exame removido conforme solicitado, o conteúdo já deve trazer o nome formatado */}
             {renderHTMLContent(se.result_value || "")}
           </View>
         ))}
