@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
     paddingTop: 170,    
     paddingBottom: 80,  
     paddingHorizontal: 50,
-    fontFamily: 'Courier', // Usando Courier para garantir que espaços tenham largura fixa
+    fontFamily: 'Courier', 
     backgroundColor: '#ffffff',
   },
   background: {
@@ -74,7 +74,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Helvetica-Bold',
     textAlign: 'center',
-    textDecoration: 'underline',
     marginTop: 15,
     marginBottom: 10,
     textTransform: 'uppercase',
@@ -90,17 +89,15 @@ const styles = StyleSheet.create({
   },
   resultText: {
     fontSize: 9,
-    fontFamily: 'Courier', // Preserva alinhamento de tabelas e espaços
+    fontFamily: 'Courier', 
     lineHeight: 1.2,
     color: '#000000',
   }
 });
 
-// Função ajustada para manter espaços "a risca"
 const formatFinalReport = (text: string) => {
   if (!text) return [];
   return text.split('\n').map(line => {
-    // Remove apenas o marcador de preenchimento, mantendo todo o resto intacto
     return line.replace(/\(\s*[?&]\s*\)/g, '').replace(/\(\?\)/g, '');
   });
 };
