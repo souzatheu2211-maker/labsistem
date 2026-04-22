@@ -162,7 +162,9 @@ const renderHTMLContent = (html: string) => {
     .replace(/<\/p>/g, "\n")
     .replace(/<br\s*\/?>/g, "\n")
     .replace(/<div>/g, "")
-    .replace(/<\/div>/g, "\n");
+    .replace(/<\/div>/g, "\n")
+    .replace(/<span[^>]*>/g, "")
+    .replace(/<\/span>/g, "");
 
   const lines = cleanHtml.split("\n");
 
@@ -213,6 +215,7 @@ const renderHTMLContent = (html: string) => {
       !trimmedLine.toUpperCase().includes("MATERIAL");
 
     const hasTab = trimmedLine.includes("\t");
+    const hasMultiSpaceColumns = /\s{5,}/.test(trimmedLine);
 
     if (isMainResultLine) {
       const [left, ...rest] = trimmedLine.split(":");
@@ -230,8 +233,13 @@ const renderHTMLContent = (html: string) => {
       );
     }
 
-    if (hasTab) {
-      const cols = trimmedLine.split("\t").map((c) => cleanGarbage(c));
+    if (hasTab || hasMultiSpaceColumns) {
+      const cols = hasTab
+        ? trimmedLine.split("\t")
+        : trimmedLine.split(/\s{5,}/);
+
+      const left = cleanGarbage(cols[0] || "");
+      const right = cleanGarbage(cols.slice(1).join(" ") || "");
 
       return (
         <View
@@ -243,13 +251,13 @@ const renderHTMLContent = (html: string) => {
         >
           <View style={styles.leftCol}>
             <Text style={isRefLine ? styles.refText : styles.normalText}>
-              {cols[0] || ""}
+              {left}
             </Text>
           </View>
 
           <View style={styles.rightCol}>
             <Text style={isRefLine ? styles.refText : styles.normalText}>
-              {cols[1] || ""}
+              {right}
             </Text>
           </View>
         </View>
@@ -321,7 +329,6 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
     grouped[group].push(se);
   });
 
-  // Ordenação interna: por order_index se existir, senão por nome
   Object.keys(grouped).forEach((key) => {
     grouped[key] = grouped[key].sort((a, b) => {
       const orderA = a.exams?.pre_reports?.[0]?.order_index ?? 999;
