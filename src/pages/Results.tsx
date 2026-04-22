@@ -14,7 +14,8 @@ import {
   Type,
   RotateCcw,
   LayoutTemplate,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -45,23 +46,29 @@ const Results = () => {
 
   const fetchPendingServices = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('services')
-      .select(`
-        *,
-        patients (full_name, cpf),
-        service_exams (
-          id,
-          status,
-          result_value,
-          exam_id,
-          exams (name)
-        )
-      `)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select(`
+          *,
+          patients (full_name, cpf),
+          service_exams (
+            id,
+            status,
+            result_value,
+            exam_id,
+            exams (name)
+          )
+        `)
+        .order('created_at', { ascending: false });
 
-    if (!error) setServices(data || []);
-    setLoading(false);
+      if (error) throw error;
+      setServices(data || []);
+    } catch (err: any) {
+      showError("Erro ao carregar atendimentos: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getParamLabels = (text: string) => {
@@ -83,40 +90,42 @@ const Results = () => {
     setIsManualMode(count === 0);
   };
 
-  const handleSelectExam = async (se: any) => {
-    setSelectedExam(se);
-    setAvailableTemplates([]);
+  const fetchTemplatesForExam = async (examId: string) => {
     setLoadingTemplates(true);
-    
     try {
-      // Busca modelos específicos para este exame
-      const { data: templates, error } = await supabase
+      const { data, error } = await supabase
         .from('pre_reports')
         .select('*')
-        .eq('exam_id', se.exam_id)
+        .eq('exam_id', examId)
         .order('name');
 
       if (error) throw error;
-
-      setAvailableTemplates(templates || []);
-
-      if (se.result_value) {
-        setManualText(se.result_value);
-        setTemplate('');
-        setParameters([]);
-        setIsManualMode(true);
-      } else if (templates && templates.length > 0) {
-        applyTemplate(templates[0].content);
-      } else {
-        setManualText('');
-        setTemplate('');
-        setParameters([]);
-        setIsManualMode(true);
-      }
+      setAvailableTemplates(data || []);
+      return data || [];
     } catch (err: any) {
-      showError("Erro ao carregar modelos: " + err.message);
+      showError("Erro ao carregar pré-laudos: " + err.message);
+      return [];
     } finally {
       setLoadingTemplates(false);
+    }
+  };
+
+  const handleSelectExam = async (se: any) => {
+    setSelectedExam(se);
+    const templates = await fetchTemplatesForExam(se.exam_id);
+
+    if (se.result_value) {
+      setManualText(se.result_value);
+      setTemplate('');
+      setParameters([]);
+      setIsManualMode(true);
+    } else if (templates && templates.length > 0) {
+      applyTemplate(templates[0].content);
+    } else {
+      setManualText('');
+      setTemplate('');
+      setParameters([]);
+      setIsManualMode(true);
     }
   };
 
@@ -297,9 +306,19 @@ const Results = () => {
                   <div className="xl:col-span-1 space-y-6">
                     {/* Seletor de Modelos */}
                     <div className="bg-blue-950/40 border border-white/10 rounded-[2rem] p-6">
-                      <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <LayoutTemplate className="w-4 h-4" /> Modelos Disponíveis
-                      </h3>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                          <LayoutTemplate className="w-4 h-4" /> Modelos Disponíveis
+                        </h3>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => fetchTemplatesForExam(selectedExam.exam_id)}
+                          className="h-6 w-6 text-blue-400 hover:bg-blue-500/10"
+                        >
+                          <RefreshCw className={cn("w-3 h-3", loadingTemplates && "animate-spin")} />
+                        </Button>
+                      </div>
                       
                       {loadingTemplates ? (
                         <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 text-blue-500 animate-spin" /></div>
