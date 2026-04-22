@@ -25,7 +25,6 @@ import {
   PDFDownloadLink, 
   Image
 } from "@react-pdf/renderer";
-import { cn } from "@/lib/utils";
 
 const formatSafeDate = (dateStr: string) => {
   if (!dateStr) return "";
@@ -129,7 +128,6 @@ const LabReportPDF = ({ service, patient, reportData, results }: { service: any,
         </View>
 
         {reportData.map((report: any, rIdx: number) => {
-          // Encontrar o service_exam_id correspondente a este modelo
           const serviceExam = service.service_exams.find((se: any) => se.exam_id === report.exam_id);
           
           return (
@@ -143,7 +141,6 @@ const LabReportPDF = ({ service, patient, reportData, results }: { service: any,
               </View>
 
               {report.items.map((item: any, iIdx: number) => {
-                // Buscar o resultado real do paciente para este parâmetro
                 const patientResult = results.find(r => 
                   r.service_exam_id === serviceExam?.id && 
                   r.parameter_name === item.parameter
@@ -219,7 +216,7 @@ const Reports = () => {
       const newReportDataMap: Record<string, any[]> = {};
       const serviceExamIds = srvs.flatMap(s => s.service_exams.map((se: any) => se.id));
       
-      // Buscar resultados reais
+      // Buscar resultados reais salvos
       const { data: resData } = await supabase
         .from('service_exam_results')
         .select('*')
@@ -252,9 +249,9 @@ const Reports = () => {
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
             <Printer className="w-6 h-6 text-blue-400" />
-            Impressão de Laudos (Pré-Modelos)
+            Impressão de Laudos Oficiais
           </h1>
-          <p className="text-blue-300/50 text-sm mt-1 font-medium">Geração de PDFs mesclando modelos com resultados reais</p>
+          <p className="text-blue-300/50 text-sm mt-1 font-medium">Geração de PDFs com base nos resultados lançados</p>
         </div>
 
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">

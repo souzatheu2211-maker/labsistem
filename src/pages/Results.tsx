@@ -67,7 +67,7 @@ const Results = () => {
       const items = report.pre_report_items.sort((a: any, b: any) => a.line_order - b.line_order);
       setParameters(items);
 
-      // Buscar resultados já salvos
+      // Buscar resultados já salvos para este atendimento específico
       const { data: existingResults } = await supabase
         .from('service_exam_results')
         .select('*')
@@ -99,15 +99,18 @@ const Results = () => {
         value: val
       }));
 
+      // Limpar resultados antigos e inserir novos
       await supabase.from('service_exam_results').delete().eq('service_exam_id', selectedExam.id);
       const { error: resError } = await supabase.from('service_exam_results').insert(resultsToInsert);
       
       if (resError) throw resError;
 
+      // Atualizar status do exame
       await supabase.from('service_exams').update({ status: 'finalizado' }).eq('id', selectedExam.id);
 
-      showSuccess('Resultados salvos com base no modelo!');
+      showSuccess('Resultados salvos com sucesso!');
       
+      // Verificar se todos os exames do atendimento foram finalizados
       const updatedExams = selectedService.service_exams.map((se: any) => 
         se.id === selectedExam.id ? { ...se, status: 'finalizado' } : se
       );
@@ -137,9 +140,9 @@ const Results = () => {
           <div>
             <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
               <FileCheck className="w-6 h-6 text-blue-400" />
-              Lançamento por Modelo
+              Lançamento de Resultados
             </h1>
-            <p className="text-blue-300/50 text-sm mt-1 font-medium">Preencha os resultados seguindo a estrutura do pré-laudo</p>
+            <p className="text-blue-300/50 text-sm mt-1 font-medium">Preencha os resultados com base nos modelos cadastrados</p>
           </div>
           {selectedService && (
             <Button variant="ghost" onClick={() => { setSelectedService(null); setSelectedExam(null); }} className="text-blue-400 hover:bg-blue-500/10 font-bold uppercase text-[10px]">
@@ -265,7 +268,7 @@ const Results = () => {
                             <p className="text-sm font-bold text-white uppercase">{param.parameter}</p>
                           </div>
                           <div className="md:col-span-1">
-                            <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-1">Resultado ({param.unit})</label>
+                            <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-1">Resultado ({param.unit || 'unid'})</label>
                             <Input 
                               value={values[param.parameter] || ''}
                               onChange={(e) => handleValueChange(param.parameter, e.target.value)}
@@ -274,7 +277,7 @@ const Results = () => {
                             />
                           </div>
                           <div className="md:col-span-1">
-                            <label className="text-[10px] font-black text-blue-300/30 uppercase tracking-widest block mb-1">Referência do Modelo</label>
+                            <label className="text-[10px] font-black text-blue-300/30 uppercase tracking-widest block mb-1">Referência</label>
                             <p className="text-[10px] text-blue-300/50 font-medium italic">
                               {selectedService.patients?.gender === 'masculino' ? param.ref_male : 
                                selectedService.patients?.gender === 'feminino' ? param.ref_female : 
