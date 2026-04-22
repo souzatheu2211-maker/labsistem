@@ -15,7 +15,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { showSuccess, showError } from "@/utils/toast";
 import { format, parseISO } from "date-fns";
 import { 
   Document, 
@@ -27,7 +26,6 @@ import {
   Image
 } from "@react-pdf/renderer";
 
-// Função para formatar data sem erro de fuso horário (UTC para Local)
 const formatSafeDate = (dateStr: string) => {
   if (!dateStr) return "";
   if (dateStr.length === 10) {
@@ -37,7 +35,6 @@ const formatSafeDate = (dateStr: string) => {
   return format(parseISO(dateStr), "dd/MM/yyyy");
 };
 
-// Configuração de Estilos para o PDF (A4) usando Times-Roman
 const styles = StyleSheet.create({
   page: {
     paddingTop: 170,    
@@ -106,37 +103,13 @@ const styles = StyleSheet.create({
   }
 });
 
-/**
- * MOTOR DE FORMATAÇÃO DE LAUDO
- * Aplica as regras de limpeza profunda e substituição de placeholders
- */
 const formatFinalReport = (text: string) => {
   if (!text) return [];
-
   return text.split('\n').map(line => {
-    // 1. Remover placeholders (?) e (&)
     let cleaned = line.replace(/\(\s*[?&]\s*\)/g, '').trim();
-    
-    // 2. Remover lixo visual comum (sequências de underscores, interrogações, etc)
     cleaned = cleaned.replace(/_{2,}/g, '');
     cleaned = cleaned.replace(/\?{2,}/g, '');
-    
-    // 3. Remover espaços duplicados
     cleaned = cleaned.replace(/\s{2,}/g, ' ');
-
-    // 4. Regra de Símbolos Soltos: Se a linha contém apenas unidades ou labels sem valor real
-    const units = ['mg/dl', 'U/L', 'g/dL', 'mm/h', 'pg', 'fL', 'mcg/dL', 'ng/mL', 'mUI/L'];
-    const hasUnit = units.some(u => cleaned.toLowerCase().includes(u.toLowerCase()));
-    
-    const hasValue = /[0-9]/.test(cleaned) || /reagente|positivo|negativo|ausência|presença/i.test(cleaned);
-    
-    if (hasUnit && !hasValue) {
-      units.forEach(u => {
-        const reg = new RegExp(`\\s*${u.replace('/', '\\/')}`, 'gi');
-        cleaned = cleaned.replace(reg, '');
-      });
-    }
-
     return cleaned.trim();
   }).filter(line => line.length > 0);
 };
@@ -161,14 +134,12 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
     groups[sector].push(se);
   });
 
-  // Agora aponta para a raiz (pasta public)
   const timbreUrl = `${window.location.origin}/timbre.png`;
 
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
         <Image src={timbreUrl} style={styles.background} fixed />
-
         <View style={styles.patientInfoFixed} fixed>
           <View style={styles.patientRow}>
             <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
@@ -180,10 +151,8 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
             <Text style={styles.label}>DATA: <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text></Text>
           </View>
         </View>
-
         {sectorOrder.map(sector => {
           if (!groups[sector]) return null;
-          
           return (
             <View key={sector} wrap={false}>
               <Text style={styles.sectorTitle}>{sector}</Text>
@@ -191,18 +160,8 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
                   {formatFinalReport(se.result_value || "").map((line: string, i: number) => {
-                    const isRef = line.toLowerCase().includes("referência") || 
-                                  line.toLowerCase().includes("ref:") || 
-                                  line.toLowerCase().includes("valor:") || 
-                                  line.toLowerCase().includes("vr:") ||
-                                  line.toLowerCase().includes("normal:") ||
-                                  line.toLowerCase().includes("desejável:");
-                    
-                    return (
-                      <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
-                        {line}
-                      </Text>
-                    );
+                    const isRef = line.toLowerCase().includes("referência") || line.toLowerCase().includes("ref:") || line.toLowerCase().includes("valor:") || line.toLowerCase().includes("vr:");
+                    return <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>{line}</Text>;
                   })}
                 </View>
               ))}
@@ -230,6 +189,19 @@ const Reports = () => {
     }
   }, [search]);
 
+  useEffect(() => {
+    if (selectedPatient) {
+      fetchPatientServices(selectedPatient.id);
+
+      const channel = supabase
+        .channel('reports-update')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'services', filter: `patient_id=eq.${selectedPatient.id}` }, () => fetchPatientServices(selectedPatient.id))
+        .subscribe();
+
+      return () => { supabase.removeChannel(channel); };
+    }
+  }, [selectedPatient]);
+
   const searchPatients = async () => {
     setLoading(true);
     const { data } = await supabase
@@ -237,16 +209,11 @@ const Reports = () => {
       .select("*")
       .or(`full_name.ilike.%${search}%,cpf.ilike.%${search}%`)
       .limit(5);
-
     setPatients(data || []);
     setLoading(false);
   };
 
-  const handleSelectPatient = async (patient: any) => {
-    setSelectedPatient(patient);
-    setPatients([]);
-    setSearch("");
-
+  const fetchPatientServices = async (patientId: string) => {
     const { data } = await supabase
       .from("services")
       .select(`
@@ -256,11 +223,17 @@ const Reports = () => {
           exams (name)
         )
       `)
-      .eq("patient_id", patient.id)
+      .eq("patient_id", patientId)
       .eq("status", "finalizado")
       .order("created_at", { ascending: false });
 
     setServices(data || []);
+  };
+
+  const handleSelectPatient = (patient: any) => {
+    setSelectedPatient(patient);
+    setPatients([]);
+    setSearch("");
   };
 
   return (
@@ -278,7 +251,7 @@ const Reports = () => {
           <div className="relative">
             <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
             <Input
-              placeholder="Buscar por Nome, CPF ou Registro..."
+              placeholder="Buscar por Nome ou CPF..."
               className="bg-blue-900/20 border-blue-500/10 h-12 pl-12 rounded-2xl text-white font-bold"
               value={search}
               onChange={(e) => setSearch(e.target.value)}

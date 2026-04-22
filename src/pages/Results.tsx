@@ -9,11 +9,8 @@ import {
   ArrowLeft, 
   CheckCircle2, 
   Loader2,
-  RefreshCw,
-  ChevronRight,
   Edit3,
-  FileText,
-  AlertCircle
+  FileText
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -34,6 +31,17 @@ const Results = () => {
 
   useEffect(() => {
     fetchServices();
+
+    // Realtime: Atualiza a fila quando houver mudanças em atendimentos ou exames
+    const channel = supabase
+      .channel('results-queue')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, () => fetchServices())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'service_exams' }, () => fetchServices())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchServices = async () => {
@@ -56,8 +64,14 @@ const Results = () => {
 
       if (error) throw error;
       setServices(data || []);
+      
+      // Se houver um serviço selecionado, atualiza os dados dele também
+      if (selectedService) {
+        const updated = data?.find(s => s.id === selectedService.id);
+        if (updated) setSelectedService(updated);
+      }
     } catch (err: any) {
-      showError('Erro ao carregar fila: ' + err.message);
+      console.error('Erro ao carregar fila:', err);
     } finally {
       setLoading(false);
     }
@@ -121,7 +135,7 @@ const Results = () => {
 
       if (examError) throw examError;
 
-      // 2. Verificar se todos os exames deste atendimento foram finalizados
+      // 2. Buscar status atualizado de todos os exames do atendimento
       const { data: allExams } = await supabase
         .from('service_exams')
         .select('status')
@@ -130,21 +144,21 @@ const Results = () => {
       const allFinished = allExams?.every(e => e.status === 'finalizado');
 
       if (allFinished) {
-        // 3. Atualizar o status global do atendimento para 'finalizado'
+        // 3. Finalizar o atendimento global
         await supabase
           .from('services')
           .update({ status: 'finalizado' })
           .eq('id', selectedService.id);
         
-        showSuccess('Atendimento completo e enviado para impressão!');
+        showSuccess('Atendimento finalizado e pronto para impressão!');
       } else {
-        showSuccess('Resultado do exame salvo!');
+        showSuccess('Resultado salvo com sucesso!');
       }
 
       setSelectedExam(null);
       fetchServices();
     } catch (err: any) {
-      showError('Erro ao salvar: ' + err.message);
+      showError('Erro ao salvar resultado.');
     } finally {
       setIsSaving(false);
     }
