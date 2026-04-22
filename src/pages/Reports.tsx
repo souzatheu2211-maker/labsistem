@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: "absolute",
-    top: 145,
+    top: 140, // SUBIU MAIS UM POUCO (SEM ENCOSTAR NA LINHA DO TIMBRE)
     left: 50,
     right: 50,
     borderBottom: 1,
@@ -78,7 +78,6 @@ const styles = StyleSheet.create({
     marginBottom: 18
   },
 
-  // linha normal
   htmlLine: {
     marginBottom: 1,
     flexDirection: "row",
@@ -86,18 +85,17 @@ const styles = StyleSheet.create({
     alignItems: "baseline"
   },
 
-  // linha em colunas (estilo laboratório)
   twoColLine: {
     flexDirection: "row",
     marginBottom: 1
   },
   leftCol: {
-    width: "60%",
+    width: "62%", // MAIS PERTO (ANTES 60%)
     paddingRight: 6
   },
   rightCol: {
-    width: "40%",
-    paddingLeft: 6
+    width: "38%", // MAIS PERTO (ANTES 40%)
+    paddingLeft: 4
   },
 
   resultText: {
@@ -168,16 +166,14 @@ const renderHTMLContent = (html: string) => {
       trimmedLine.toUpperCase().includes("MÉTODO") ||
       trimmedLine.toUpperCase().includes("MET.");
 
-    // linha principal: EXAME: RESULTADO
     const isMainResultLine =
       trimmedLine.includes(":") &&
       !isRefLine &&
       !trimmedLine.toUpperCase().includes("MATERIAL");
 
-    // se tiver TAB (tabela ref com coluna direita)
     const hasTab = trimmedLine.includes("\t");
 
-    // CASO 1: Linha principal (nome do exame e resultado alinhado na direita)
+    // LINHA PRINCIPAL: NOME DO EXAME À ESQUERDA / RESULTADO À DIREITA
     if (isMainResultLine) {
       const [left, ...rest] = trimmedLine.split(":");
       const right = rest.join(":").trim();
@@ -194,7 +190,7 @@ const renderHTMLContent = (html: string) => {
       );
     }
 
-    // CASO 2: Linha com TAB (referências em duas colunas)
+    // TABELA EM 2 COLUNAS (TAB)
     if (hasTab) {
       const cols = trimmedLine.split("\t").map((c) => cleanGarbage(c));
 
@@ -221,7 +217,7 @@ const renderHTMLContent = (html: string) => {
       );
     }
 
-    // CASO 3: linha normal (texto simples)
+    // LINHA NORMAL
     return (
       <View
         key={i}
@@ -259,6 +255,7 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
                 {patient.full_name.toUpperCase()}
               </Text>
             </Text>
+
             <Text style={styles.label}>
               DATA DE NASCIMENTO:{" "}
               <Text style={styles.value}>
@@ -271,12 +268,14 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
             <Text style={styles.label}>
               CPF: <Text style={styles.value}>{patient.cpf}</Text>
             </Text>
+
             <Text style={styles.label}>
               DATA:{" "}
               <Text style={styles.value}>
                 {formatSafeDate(service.created_at)}
               </Text>
             </Text>
+
             <Text style={styles.label}>
               REGISTRO:{" "}
               <Text style={styles.value}>
