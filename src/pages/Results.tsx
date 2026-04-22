@@ -9,7 +9,6 @@ import {
   Loader2, 
   ChevronRight, 
   Save, 
-  X, 
   FlaskConical,
   Type,
   RotateCcw,
@@ -71,13 +70,15 @@ const Results = () => {
     }
   };
 
+  // Função para extrair os nomes dos campos baseados no texto antes do (?)
   const getParamLabels = (text: string) => {
     if (!text) return [];
     const parts = text.split('(?)');
     return parts.slice(0, -1).map(part => {
       const lines = part.trim().split('\n');
       const lastLine = lines[lines.length - 1].trim();
-      const label = lastLine.split(/[:.]/).pop()?.trim() || lastLine.slice(-15).trim();
+      // Pega o nome do parâmetro (ex: "Hemoglobina: ")
+      const label = lastLine.split(/[:.]/).pop()?.trim() || lastLine.slice(-20).trim();
       return label || "Valor";
     });
   };
@@ -93,6 +94,7 @@ const Results = () => {
   const fetchTemplatesForExam = async (examId: string) => {
     setLoadingTemplates(true);
     try {
+      // Busca na tabela pre_reports filtrando pelo exam_id
       const { data, error } = await supabase
         .from('pre_reports')
         .select('*')
@@ -115,13 +117,16 @@ const Results = () => {
     const templates = await fetchTemplatesForExam(se.exam_id);
 
     if (se.result_value) {
+      // Se já existe um resultado salvo, carrega ele no modo manual
       setManualText(se.result_value);
       setTemplate('');
       setParameters([]);
       setIsManualMode(true);
     } else if (templates && templates.length > 0) {
+      // Se não tem resultado mas tem modelos, aplica o primeiro automaticamente
       applyTemplate(templates[0].content);
     } else {
+      // Se não tem nada, abre em branco no modo manual
       setManualText('');
       setTemplate('');
       setParameters([]);
@@ -129,11 +134,13 @@ const Results = () => {
     }
   };
 
+  // O laudo final é gerado em tempo real substituindo os (?) pelos valores dos inputs
   const finalReport = useMemo(() => {
     if (isManualMode) return manualText;
     
     let result = template;
     parameters.forEach(param => {
+      // Substitui apenas a primeira ocorrência de (?) a cada iteração
       result = result.replace('(?)', param || '___');
     });
     return result;
@@ -161,6 +168,7 @@ const Results = () => {
 
       showSuccess('Resultado salvo com sucesso!');
       
+      // Atualiza o estado local para refletir a mudança
       const updatedExams = selectedService.service_exams.map((se: any) => 
         se.id === selectedExam.id ? { ...se, status: 'finalizado', result_value: finalReport } : se
       );
