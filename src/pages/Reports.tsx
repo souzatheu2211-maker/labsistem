@@ -75,14 +75,31 @@ const styles = StyleSheet.create({
     color: "#000000"
   },
   examBlock: {
-    marginBottom: 20
+    marginBottom: 18
   },
+
+  // linha normal
   htmlLine: {
     marginBottom: 1,
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "baseline"
   },
+
+  // linha em colunas (estilo laboratório)
+  twoColLine: {
+    flexDirection: "row",
+    marginBottom: 1
+  },
+  leftCol: {
+    width: "60%",
+    paddingRight: 6
+  },
+  rightCol: {
+    width: "40%",
+    paddingLeft: 6
+  },
+
   resultText: {
     fontSize: 12,
     fontFamily: "Times-Bold"
@@ -128,6 +145,8 @@ const renderHTMLContent = (html: string) => {
     trimmedLine = cleanGarbage(trimmedLine);
     if (!trimmedLine) return <View key={i} style={{ height: 6 }} />;
 
+    trimmedLine = trimmedLine.replace(/[\u200B-\u200D\uFEFF]/g, "");
+
     const isRefLine =
       trimmedLine.toUpperCase().includes("VALOR DE REFERÊNCIA") ||
       trimmedLine.toUpperCase().includes("VALORES DE REFERÊNCIA") ||
@@ -149,13 +168,33 @@ const renderHTMLContent = (html: string) => {
       trimmedLine.toUpperCase().includes("MÉTODO") ||
       trimmedLine.toUpperCase().includes("MET.");
 
+    // linha principal: EXAME: RESULTADO
     const isMainResultLine =
       trimmedLine.includes(":") &&
-      trimmedLine.match(/\(\?\)|\d/) &&
-      !isRefLine;
+      !isRefLine &&
+      !trimmedLine.toUpperCase().includes("MATERIAL");
 
+    // se tiver TAB (tabela ref com coluna direita)
     const hasTab = trimmedLine.includes("\t");
 
+    // CASO 1: Linha principal (nome do exame e resultado alinhado na direita)
+    if (isMainResultLine) {
+      const [left, ...rest] = trimmedLine.split(":");
+      const right = rest.join(":").trim();
+
+      return (
+        <View key={i} style={styles.twoColLine}>
+          <View style={styles.leftCol}>
+            <Text style={styles.resultText}>{left.trim()}:</Text>
+          </View>
+          <View style={styles.rightCol}>
+            <Text style={styles.resultText}>{right}</Text>
+          </View>
+        </View>
+      );
+    }
+
+    // CASO 2: Linha com TAB (referências em duas colunas)
     if (hasTab) {
       const cols = trimmedLine.split("\t").map((c) => cleanGarbage(c));
 
@@ -163,55 +202,36 @@ const renderHTMLContent = (html: string) => {
         <View
           key={i}
           style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
+            ...styles.twoColLine,
             marginBottom: isRefLine ? 0 : 1
           }}
         >
-          <Text style={isRefLine ? styles.refText : styles.normalText}>
-            {cols[0] || ""}
-          </Text>
+          <View style={styles.leftCol}>
+            <Text style={isRefLine ? styles.refText : styles.normalText}>
+              {cols[0] || ""}
+            </Text>
+          </View>
 
-          <Text style={isRefLine ? styles.refText : styles.normalText}>
-            {cols[1] || ""}
-          </Text>
+          <View style={styles.rightCol}>
+            <Text style={isRefLine ? styles.refText : styles.normalText}>
+              {cols[1] || ""}
+            </Text>
+          </View>
         </View>
       );
     }
 
-    const parts = trimmedLine.split(/(<b>.*?<\/b>|<strong>.*?<\/strong>)/g);
-
-    const lineStyle = isRefLine
-      ? { ...styles.htmlLine, marginBottom: 0 }
-      : styles.htmlLine;
-
+    // CASO 3: linha normal (texto simples)
     return (
-      <View key={i} style={lineStyle}>
-        {parts.map((part, j) => {
-          const isBold = part.startsWith("<b>") || part.startsWith("<strong>");
-          let text = part.replace(/<[^>]*>/g, "");
-
-          text = cleanGarbage(text);
-          text = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
-
-          if (!text) return null;
-
-          let textStyle = styles.normalText;
-
-          if (isRefLine) {
-            textStyle = styles.refText;
-          } else if (isMainResultLine) {
-            textStyle = styles.resultText;
-          } else if (isBold) {
-            textStyle = styles.resultText;
-          }
-
-          return (
-            <Text key={j} style={textStyle}>
-              {text}
-            </Text>
-          );
-        })}
+      <View
+        key={i}
+        style={
+          isRefLine ? { ...styles.htmlLine, marginBottom: 0 } : styles.htmlLine
+        }
+      >
+        <Text style={isRefLine ? styles.refText : styles.normalText}>
+          {trimmedLine}
+        </Text>
       </View>
     );
   });
