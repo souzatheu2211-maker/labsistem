@@ -2,7 +2,7 @@
 
 import React from 'react';
 import LoginForm from '@/components/LoginForm';
-import { Microscope, FlaskConical, TestTube2, Dna, Activity } from 'lucide-react';
+import { Microscope, FlaskConical, TestTube2, Activity } from 'lucide-react';
 
 const Index = () => {
   return (
@@ -26,10 +26,17 @@ const Index = () => {
 
             <div className="relative group">
               <div className="absolute -inset-1 bg-blue-500/20 rounded-[3rem] blur-2xl opacity-50 group-hover:opacity-100 transition duration-1000"></div>
-              <div className="relative aspect-square rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl bg-blue-950/40 flex flex-col items-center justify-center p-12 text-center">
-                <Activity className="w-24 h-24 text-blue-500 mb-6 animate-pulse" />
-                <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Sistema de Gestão Laboratorial</h3>
-                <p className="text-blue-300/40 text-xs mt-4 font-bold uppercase tracking-widest">Precisão em cada detalhe</p>
+              <div className="relative aspect-[3/4] rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl bg-blue-950/40">
+                <img 
+                  src="/illustration.png" 
+                  alt="Laboratório" 
+                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-700"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-blue-950 via-transparent to-transparent"></div>
+                <div className="absolute bottom-8 left-8 right-8">
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Precisão & Cuidado</h3>
+                  <p className="text-blue-300/60 text-[10px] font-bold uppercase tracking-widest mt-2">Tecnologia de ponta para diagnósticos confiáveis</p>
+                </div>
               </div>
             </div>
           </div>
@@ -37,7 +44,7 @@ const Index = () => {
           <div className="w-full max-w-md flex flex-col items-center">
             <div className="relative mb-8 animate-in fade-in slide-in-from-top duration-700">
               <div className="absolute -inset-10 bg-blue-500/15 rounded-full blur-3xl animate-pulse"></div>
-              <h1 className="relative text-4xl font-black text-blue-400 tracking-tighter drop-shadow-[0_0_20px_rgba(59,130,246,0.4)]">LAB ACAJUTIBA</h1>
+              <img src="/logo.png" alt="LAB ACAJUTIBA" className="h-24 relative drop-shadow-[0_0_20px_rgba(59,130,246,0.4)]" />
             </div>
 
             <div className="text-center mb-10 animate-in fade-in slide-in-from-top duration-1000 delay-200">

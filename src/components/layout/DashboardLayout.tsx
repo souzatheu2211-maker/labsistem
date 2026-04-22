@@ -57,7 +57,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           {!isCollapsed && (
             <div className="relative inline-block">
               <div className="absolute -inset-6 bg-blue-500/20 rounded-full blur-2xl animate-pulse"></div>
-              <h2 className="relative text-xl font-black text-blue-400 tracking-tighter">LAB ACAJUTIBA</h2>
+              <img src="/logo.png" alt="Logo" className="h-12 relative" />
             </div>
           )}
           <Button 

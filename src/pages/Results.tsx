@@ -29,6 +29,7 @@ const Results = () => {
   const [selectedService, setSelectedService] = useState<any>(null);
   const [selectedExam, setSelectedExam] = useState<any>(null);
   
+  // Estados do Editor de Laudo
   const [template, setTemplate] = useState('');
   const [parameters, setParameters] = useState<string[]>([]);
   const [manualText, setManualText] = useState('');
@@ -66,12 +67,14 @@ const Results = () => {
     }
   };
 
+  // Função para extrair rótulos inteligentes baseados no texto antes do (?)
   const getParamLabels = (text: string) => {
     if (!text) return [];
     const parts = text.split('(?)');
     return parts.slice(0, -1).map(part => {
       const lines = part.trim().split('\n');
       const lastLine = lines[lines.length - 1].trim();
+      // Tenta pegar o nome do parâmetro (ex: "Glicose: ")
       const label = lastLine.split(/[:.]/).pop()?.trim() || lastLine.slice(-20).trim();
       return label || "Valor";
     });
@@ -105,6 +108,7 @@ const Results = () => {
     }
   };
 
+  // Montagem do laudo final em tempo real
   const finalReport = useMemo(() => {
     if (isManualMode) return manualText;
     
@@ -138,6 +142,7 @@ const Results = () => {
 
       showSuccess('Resultado salvo com sucesso!');
       
+      // Atualiza a lista local para refletir a mudança sem recarregar tudo
       const updatedExams = selectedService.service_exams.map((se: any) => 
         se.id === selectedExam.id ? { ...se, status: 'finalizado', result_value: finalReport } : se
       );
@@ -257,6 +262,7 @@ const Results = () => {
           </>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in zoom-in duration-500">
+            {/* Coluna de Seleção de Exames do Paciente */}
             <div className="lg:col-span-3 space-y-4">
               <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6">
                 <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">Paciente</p>
@@ -285,9 +291,12 @@ const Results = () => {
               </div>
             </div>
 
+            {/* Área de Trabalho: Inputs + Preview */}
             <div className="lg:col-span-9">
               {selectedExam ? (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  
+                  {/* Coluna de Inputs (Caixinha de Resultados) */}
                   <div className="space-y-4">
                     <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] p-8 shadow-xl">
                       <div className="flex items-center justify-between mb-8">
@@ -339,6 +348,7 @@ const Results = () => {
                     </div>
                   </div>
 
+                  {/* Coluna de Preview (Quadro do Laudo) */}
                   <div className="space-y-4">
                     <div className="bg-blue-950/60 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col h-full">
                       <div className="bg-blue-900/30 border-b border-white/5 p-6 flex items-center justify-between">
@@ -369,6 +379,7 @@ const Results = () => {
                       </div>
                     </div>
                   </div>
+
                 </div>
               ) : (
                 <div className="h-[600px] flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-white/5 rounded-[2.5rem]">
