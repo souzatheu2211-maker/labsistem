@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: "absolute",
-    top: 150,
+    top: 145, // <-- ajustado um pouco mais pra cima
     left: 50,
     right: 50,
     borderBottom: 1,
@@ -217,7 +217,7 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
               </Text>
             </Text>
             <Text style={styles.label}>
-              DN:{" "}
+              DATA DE NASCIMENTO:{" "}
               <Text style={styles.value}>
                 {formatSafeDate(patient.birth_date)}
               </Text>
