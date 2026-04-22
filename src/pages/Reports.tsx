@@ -37,13 +37,13 @@ const formatSafeDate = (dateStr: string) => {
   return format(parseISO(dateStr), "dd/MM/yyyy");
 };
 
-// Configuração de Estilos para o PDF (A4)
+// Configuração de Estilos para o PDF (A4) usando Times-Roman
 const styles = StyleSheet.create({
   page: {
     paddingTop: 170,    
     paddingBottom: 80,  
     paddingHorizontal: 50,
-    fontFamily: 'Helvetica',
+    fontFamily: 'Times-Roman',
     backgroundColor: '#ffffff',
   },
   background: {
@@ -66,43 +66,82 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   label: {
-    fontSize: 13, 
-    fontWeight: 'bold',
+    fontSize: 12, 
+    fontFamily: 'Times-Bold',
   },
   value: {
-    fontSize: 13, 
+    fontSize: 12, 
+    fontFamily: 'Times-Roman',
   },
   sectorTitle: {
-    fontSize: 12,
+    fontSize: 11,
+    fontFamily: 'Times-Bold',
     textAlign: 'center',
     textDecoration: 'underline',
     marginTop: 15,
     marginBottom: 10,
     textTransform: 'uppercase',
-    fontWeight: 'bold',
   },
   examBlock: {
-    marginBottom: 20, 
+    marginBottom: 15, 
   },
   examName: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 11,
+    fontFamily: 'Times-Bold',
     marginBottom: 4,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 12, // Fonte 12 conforme solicitado
-    fontFamily: 'Courier', 
+    fontSize: 11,
+    fontFamily: 'Times-Roman',
     lineHeight: 1.2,
     color: '#000000',
   },
   referenceText: {
-    fontSize: 9, // Fonte menor para referências
-    fontFamily: 'Courier',
+    fontSize: 9,
+    fontFamily: 'Times-Roman',
     color: '#333333',
     marginTop: 1,
+    lineHeight: 1.2,
   }
 });
+
+/**
+ * MOTOR DE FORMATAÇÃO DE LAUDO
+ * Aplica as regras de limpeza profunda e substituição de placeholders
+ */
+const formatFinalReport = (text: string) => {
+  if (!text) return [];
+
+  return text.split('\n').map(line => {
+    // 1. Remover placeholders (?) e (&)
+    let cleaned = line.replace(/\(\s*[?&]\s*\)/g, '').trim();
+    
+    // 2. Remover lixo visual comum (sequências de underscores, interrogações, etc)
+    cleaned = cleaned.replace(/_{2,}/g, '');
+    cleaned = cleaned.replace(/\?{2,}/g, '');
+    
+    // 3. Remover espaços duplicados
+    cleaned = cleaned.replace(/\s{2,}/g, ' ');
+
+    // 4. Regra de Símbolos Soltos: Se a linha contém apenas unidades ou labels sem valor real
+    // Ex: "Glicose: mg/dl" -> vira apenas "Glicose:" ou é removida se for irrelevante
+    const units = ['mg/dl', 'U/L', 'g/dL', 'mm/h', 'pg', 'fL', 'mcg/dL', 'ng/mL', 'mUI/L'];
+    const hasUnit = units.some(u => cleaned.toLowerCase().includes(u.toLowerCase()));
+    
+    // Se a linha tem unidade mas não tem números ou palavras de resultado (como 'reagente'), limpamos a unidade
+    const hasValue = /[0-9]/.test(cleaned) || /reagente|positivo|negativo|ausência|presença/i.test(cleaned);
+    
+    if (hasUnit && !hasValue) {
+      units.forEach(u => {
+        const reg = new RegExp(`\\s*${u.replace('/', '\\/')}`, 'gi');
+        cleaned = cleaned.replace(reg, '');
+      });
+    }
+
+    return cleaned.trim();
+  }).filter(line => line.length > 0); // Remove linhas que ficaram totalmente vazias
+};
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA"];
@@ -125,15 +164,6 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
   });
 
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
-
-  // Função de limpeza profunda de lixo visual
-  const cleanVisualTrash = (text: string) => {
-    if (!text) return "";
-    return text
-      .replace(/\([\s?&]*\)/g, '') // Remove (?), (&), ( ? ), ( &&& ), etc.
-      .replace(/[?&]{2,}/g, '')    // Remove sequências como ???? ou &&&&
-      .replace(/\(\s*\)/g, '');    // Remove parênteses vazios que sobraram
-  };
 
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
@@ -161,14 +191,14 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
               {groups[sector].map((se: any) => (
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   <Text style={styles.examName}>{se.exams?.name}</Text>
-                  {cleanVisualTrash(se.result_value || "")
-                    .split('\n').map((line: string, i: number) => {
+                  {formatFinalReport(se.result_value || "").map((line: string, i: number) => {
                     const isRef = line.toLowerCase().includes("referência") || 
                                   line.toLowerCase().includes("ref:") || 
                                   line.toLowerCase().includes("valor:") || 
                                   line.toLowerCase().includes("vr:") ||
                                   line.toLowerCase().includes("normal:") ||
                                   line.toLowerCase().includes("desejável:");
+                    
                     return (
                       <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
                         {line}
