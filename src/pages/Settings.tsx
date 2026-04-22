@@ -15,7 +15,8 @@ import {
   GripVertical,
   ChevronRight,
   Edit3,
-  FlaskConical
+  FlaskConical,
+  AlertCircle
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -44,9 +45,19 @@ const SettingsPage = () => {
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const [reportItems, setReportItems] = useState<any[]>([]);
 
+  // Estados para Novo Modelo
   const [newReportName, setNewReportName] = useState('');
   const [selectedExamForNew, setSelectedExamForNew] = useState('');
-  const [newItem, setNewItem] = useState({ parameter: '', ref_male: '', ref_female: '', ref_general: '', unit: '', line_order: 0 });
+  
+  // Estados para Novo Item (Linha do Laudo)
+  const [newItem, setNewItem] = useState({ 
+    parameter: '', 
+    ref_male: '', 
+    ref_female: '', 
+    ref_general: '', 
+    unit: '', 
+    line_order: 0 
+  });
 
   useEffect(() => {
     fetchAllData();
@@ -60,22 +71,28 @@ const SettingsPage = () => {
         supabase.from('exams').select('*').order('name'),
         supabase.from('pre_reports').select('*, exams(name)').order('name')
       ]);
+      
       setEmployees(empRes.data || []);
       setExams(examRes.data || []);
       setAllPreReports(preRes.data || []);
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+    } catch (error: any) {
+      showError('Erro ao carregar dados: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchReportItems = async (reportId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('pre_report_items')
       .select('*')
       .eq('pre_report_id', reportId)
       .order('line_order');
+    
+    if (error) {
+      showError('Erro ao carregar itens: ' + error.message);
+      return;
+    }
     setReportItems(data || []);
   };
 
@@ -85,18 +102,27 @@ const SettingsPage = () => {
   };
 
   const handleAddReport = async () => {
-    if (!newReportName || !selectedExamForNew) return showError('Nome e Exame são obrigatórios.');
+    if (!newReportName || !selectedExamForNew) {
+      return showError('Nome do modelo e Exame vinculado são obrigatórios.');
+    }
+    
     setSubmitting(true);
     try {
       const { data, error } = await supabase
         .from('pre_reports')
-        .insert([{ name: newReportName, exam_id: selectedExamForNew }])
+        .insert([{ 
+          name: newReportName, 
+          exam_id: selectedExamForNew,
+          sector: 'Geral' 
+        }])
         .select()
         .single();
 
       if (error) throw error;
-      showSuccess('Modelo criado!');
+      
+      showSuccess('Modelo de laudo criado com sucesso!');
       setNewReportName('');
+      setSelectedExamForNew('');
       fetchAllData();
     } catch (error: any) {
       showError(error.message);
@@ -106,15 +132,21 @@ const SettingsPage = () => {
   };
 
   const handleAddItem = async () => {
-    if (!newItem.parameter) return showError('Parâmetro é obrigatório.');
+    if (!newItem.parameter) return showError('O nome do parâmetro é obrigatório.');
+    
     setSubmitting(true);
     try {
       const { error } = await supabase
         .from('pre_report_items')
-        .insert([{ ...newItem, pre_report_id: selectedReport.id, line_order: reportItems.length }]);
+        .insert([{ 
+          ...newItem, 
+          pre_report_id: selectedReport.id, 
+          line_order: reportItems.length 
+        }]);
 
       if (error) throw error;
-      showSuccess('Linha adicionada!');
+      
+      showSuccess('Parâmetro adicionado ao modelo!');
       setNewItem({ parameter: '', ref_male: '', ref_female: '', ref_general: '', unit: '', line_order: 0 });
       fetchReportItems(selectedReport.id);
     } catch (error: any) {
@@ -126,9 +158,26 @@ const SettingsPage = () => {
 
   const handleDeleteItem = async (id: string) => {
     try {
-      await supabase.from('pre_report_items').delete().eq('id', id);
+      const { error } = await supabase.from('pre_report_items').delete().eq('id', id);
+      if (error) throw error;
+      
       fetchReportItems(selectedReport.id);
-      showSuccess('Linha removida.');
+      showSuccess('Parâmetro removido.');
+    } catch (error: any) {
+      showError(error.message);
+    }
+  };
+
+  const handleDeleteReport = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este modelo de laudo?')) return;
+    
+    try {
+      const { error } = await supabase.from('pre_reports').delete().eq('id', id);
+      if (error) throw error;
+      
+      showSuccess('Modelo excluído.');
+      setSelectedReport(null);
+      fetchAllData();
     } catch (error: any) {
       showError(error.message);
     }
@@ -148,7 +197,7 @@ const SettingsPage = () => {
               <Settings className="w-6 h-6 text-blue-400" />
               Configurações do Sistema
             </h1>
-            <p className="text-blue-300/50 text-sm mt-1 font-medium">Gerencie modelos de laudos e equipe técnica</p>
+            <p className="text-blue-300/50 text-sm mt-1 font-medium">Gerencie os modelos de laudos e a equipe técnica</p>
           </div>
         </div>
 
@@ -165,11 +214,11 @@ const SettingsPage = () => {
           <TabsContent value="templates" className="animate-in fade-in slide-in-from-top duration-500">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               
-              {/* Coluna de Busca e Lista */}
+              {/* Coluna de Busca e Lista de Modelos */}
               <div className="lg:col-span-4 space-y-6">
                 <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-6 backdrop-blur-sm">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Modelos Cadastrados</h3>
+                    <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Modelos no Banco</h3>
                     <Dialog>
                       <DialogTrigger asChild>
                         <Button size="sm" className="bg-blue-600 h-8 px-3 rounded-lg gap-2 text-[9px] font-black uppercase">
@@ -177,27 +226,36 @@ const SettingsPage = () => {
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="bg-blue-950 border-white/10 text-white">
-                        <DialogHeader><DialogTitle className="uppercase tracking-widest font-black text-blue-400">Criar Novo Modelo</DialogTitle></DialogHeader>
+                        <DialogHeader>
+                          <DialogTitle className="uppercase tracking-widest font-black text-blue-400">Criar Novo Modelo de Laudo</DialogTitle>
+                        </DialogHeader>
                         <div className="space-y-4 py-4">
                           <div className="space-y-1">
                             <label className="text-[9px] font-black uppercase text-blue-300/50">Nome do Modelo (Ex: Hemograma Padrão)</label>
-                            <Input value={newReportName} onChange={e => setNewReportName(e.target.value)} className="bg-blue-900/20 border-white/10 rounded-xl" />
+                            <Input 
+                              value={newReportName} 
+                              onChange={e => setNewReportName(e.target.value)} 
+                              className="bg-blue-900/20 border-white/10 rounded-xl text-white" 
+                              placeholder="Digite o nome do modelo..."
+                            />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black uppercase text-blue-300/50">Vincular ao Exame</label>
+                            <label className="text-[9px] font-black uppercase text-blue-300/50">Vincular ao Exame Existente</label>
                             <select 
                               value={selectedExamForNew} 
                               onChange={e => setSelectedExamForNew(e.target.value)}
                               className="w-full bg-blue-900/20 border border-white/10 rounded-xl h-10 px-3 text-sm text-white outline-none focus:border-blue-500"
                             >
                               <option value="">Selecione um exame...</option>
-                              {exams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+                              {exams.map(ex => (
+                                <option key={ex.id} value={ex.id}>{ex.name}</option>
+                              ))}
                             </select>
                           </div>
                         </div>
                         <DialogFooter>
                           <Button onClick={handleAddReport} disabled={submitting} className="bg-blue-600 hover:bg-blue-500 w-full rounded-xl font-bold uppercase text-xs">
-                            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar Modelo'}
+                            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Modelo'}
                           </Button>
                         </DialogFooter>
                       </DialogContent>
@@ -207,37 +265,45 @@ const SettingsPage = () => {
                   <div className="relative mb-4">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-blue-300/30" />
                     <Input 
-                      placeholder="Buscar modelo..." 
+                      placeholder="Pesquisar modelos cadastrados..." 
                       value={searchTerm}
                       onChange={e => setSearchTerm(e.target.value)}
-                      className="bg-blue-900/20 border-white/5 h-9 pl-9 text-[10px] rounded-xl"
+                      className="bg-blue-900/20 border-white/5 h-9 pl-9 text-[10px] rounded-xl text-white"
                     />
                   </div>
 
                   <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                    {filteredReports.map(report => (
-                      <button
-                        key={report.id}
-                        onClick={() => handleSelectReport(report)}
-                        className={cn(
-                          "w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center justify-between group",
-                          selectedReport?.id === report.id ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-900/40" : "bg-blue-900/10 border-white/5 text-blue-300/60 hover:border-blue-500/30"
-                        )}
-                      >
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-tight">{report.name}</p>
-                          <p className={cn("text-[8px] font-bold uppercase mt-0.5", selectedReport?.id === report.id ? "text-blue-200" : "text-blue-500/50")}>
-                            {report.exams?.name}
-                          </p>
-                        </div>
-                        <ChevronRight className="w-4 h-4 opacity-30 group-hover:opacity-100" />
-                      </button>
-                    ))}
+                    {loading ? (
+                      <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-blue-500 animate-spin" /></div>
+                    ) : filteredReports.length > 0 ? (
+                      filteredReports.map(report => (
+                        <button
+                          key={report.id}
+                          onClick={() => handleSelectReport(report)}
+                          className={cn(
+                            "w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center justify-between group",
+                            selectedReport?.id === report.id 
+                              ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-900/40" 
+                              : "bg-blue-900/10 border-white/5 text-blue-300/60 hover:border-blue-500/30"
+                          )}
+                        >
+                          <div className="flex-grow">
+                            <p className="text-[10px] font-black uppercase tracking-tight">{report.name}</p>
+                            <p className={cn("text-[8px] font-bold uppercase mt-0.5", selectedReport?.id === report.id ? "text-blue-200" : "text-blue-500/50")}>
+                              Exame: {report.exams?.name || 'Não vinculado'}
+                            </p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 opacity-30 group-hover:opacity-100" />
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-center py-10 text-[10px] font-black uppercase text-blue-300/20">Nenhum modelo encontrado</p>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Quadro de Edição do Modelo */}
+              {/* Quadro de Edição do Modelo Selecionado */}
               <div className="lg:col-span-8">
                 {selectedReport ? (
                   <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in duration-500">
@@ -248,51 +314,85 @@ const SettingsPage = () => {
                         </div>
                         <div>
                           <h3 className="text-xl font-black text-white uppercase tracking-tight">{selectedReport.name}</h3>
-                          <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Estrutura do Laudo Oficial</p>
+                          <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Estrutura de Parâmetros do Laudo</p>
                         </div>
                       </div>
                       
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button className="bg-emerald-600 hover:bg-emerald-500 rounded-xl gap-2 font-bold uppercase text-[10px] h-10 px-6">
-                            <Plus className="w-4 h-4" /> Adicionar Parâmetro
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="bg-blue-950 border-white/10 text-white max-w-md">
-                          <DialogHeader><DialogTitle className="uppercase tracking-widest font-black text-blue-400">Nova Linha no Modelo</DialogTitle></DialogHeader>
-                          <div className="space-y-4 py-4">
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black uppercase text-blue-300/50">Parâmetro / Descrição</label>
-                              <Input value={newItem.parameter} onChange={e => setNewItem({...newItem, parameter: e.target.value})} className="bg-blue-900/20 border-white/10 rounded-xl" placeholder="Ex: Hemoglobina" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-black uppercase text-blue-300/50">Ref. Masculino</label>
-                                <Input value={newItem.ref_male} onChange={e => setNewItem({...newItem, ref_male: e.target.value})} className="bg-blue-900/20 border-white/10 rounded-xl" />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-black uppercase text-blue-300/50">Ref. Feminino</label>
-                                <Input value={newItem.ref_female} onChange={e => setNewItem({...newItem, ref_female: e.target.value})} className="bg-blue-900/20 border-white/10 rounded-xl" />
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-black uppercase text-blue-300/50">Unidade</label>
-                                <Input value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} className="bg-blue-900/20 border-white/10 rounded-xl" placeholder="g/dL" />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-black uppercase text-blue-300/50">Ref. Geral</label>
-                                <Input value={newItem.ref_general} onChange={e => setNewItem({...newItem, ref_general: e.target.value})} className="bg-blue-900/20 border-white/10 rounded-xl" />
-                              </div>
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button onClick={handleAddItem} disabled={submitting} className="bg-blue-600 hover:bg-blue-500 w-full rounded-xl font-bold uppercase text-xs">
-                              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Parâmetro'}
+                      <div className="flex items-center gap-3">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleDeleteReport(selectedReport.id)}
+                          className="text-red-400/40 hover:text-red-400 hover:bg-red-500/10 rounded-xl h-10 px-4 font-bold uppercase text-[10px]"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" /> Excluir Modelo
+                        </Button>
+
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button className="bg-emerald-600 hover:bg-emerald-500 rounded-xl gap-2 font-bold uppercase text-[10px] h-10 px-6">
+                              <Plus className="w-4 h-4" /> Adicionar Linha
                             </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
+                          </DialogTrigger>
+                          <DialogContent className="bg-blue-950 border-white/10 text-white max-w-md">
+                            <DialogHeader>
+                              <DialogTitle className="uppercase tracking-widest font-black text-blue-400">Novo Parâmetro no Modelo</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-black uppercase text-blue-300/50">Nome do Parâmetro (Ex: Hemoglobina)</label>
+                                <Input 
+                                  value={newItem.parameter} 
+                                  onChange={e => setNewItem({...newItem, parameter: e.target.value})} 
+                                  className="bg-blue-900/20 border-white/10 rounded-xl text-white" 
+                                  placeholder="Ex: Glicose" 
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-black uppercase text-blue-300/50">Ref. Masculino</label>
+                                  <Input 
+                                    value={newItem.ref_male} 
+                                    onChange={e => setNewItem({...newItem, ref_male: e.target.value})} 
+                                    className="bg-blue-900/20 border-white/10 rounded-xl text-white" 
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-black uppercase text-blue-300/50">Ref. Feminino</label>
+                                  <Input 
+                                    value={newItem.ref_female} 
+                                    onChange={e => setNewItem({...newItem, ref_female: e.target.value})} 
+                                    className="bg-blue-900/20 border-white/10 rounded-xl text-white" 
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-black uppercase text-blue-300/50">Unidade</label>
+                                  <Input 
+                                    value={newItem.unit} 
+                                    onChange={e => setNewItem({...newItem, unit: e.target.value})} 
+                                    className="bg-blue-900/20 border-white/10 rounded-xl text-white" 
+                                    placeholder="mg/dL" 
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-black uppercase text-blue-300/50">Ref. Geral</label>
+                                  <Input 
+                                    value={newItem.ref_general} 
+                                    onChange={e => setNewItem({...newItem, ref_general: e.target.value})} 
+                                    className="bg-blue-900/20 border-white/10 rounded-xl text-white" 
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button onClick={handleAddItem} disabled={submitting} className="bg-blue-600 hover:bg-blue-500 w-full rounded-xl font-bold uppercase text-xs">
+                                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Parâmetro'}
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -314,7 +414,12 @@ const SettingsPage = () => {
                                 <p className="text-[10px] text-blue-100 truncate">{item.ref_general || '-'} {item.unit ? `(${item.unit})` : ''}</p>
                               </div>
                               <div className="col-span-1 flex justify-end">
-                                <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(item.id)} className="text-red-400/20 hover:text-red-400 h-8 w-8">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => handleDeleteItem(item.id)} 
+                                  className="text-red-400/20 hover:text-red-400 h-8 w-8"
+                                >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
                               </div>
@@ -344,7 +449,9 @@ const SettingsPage = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {employees.map((emp) => (
                   <div key={emp.id} className="bg-blue-900/20 border border-white/5 p-5 rounded-2xl flex items-center gap-4 group hover:border-blue-500/30 transition-all">
-                    <div className="w-12 h-12 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400"><UserCircle className="w-8 h-8" /></div>
+                    <div className="w-12 h-12 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400">
+                      <UserCircle className="w-8 h-8" />
+                    </div>
                     <div className="flex-grow">
                       <p className="text-sm font-bold text-white uppercase">{emp.first_name} {emp.last_name}</p>
                       <div className="flex items-center gap-1.5 mt-1">
