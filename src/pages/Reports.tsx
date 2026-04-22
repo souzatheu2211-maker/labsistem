@@ -96,26 +96,21 @@ const styles = StyleSheet.create({
     fontFamily: "Times-Roman",
     color: "#000000"
   },
-
-  // 🔥 IGUAL AO WORD
   pageTitle: {
     fontSize: 14,
     fontFamily: "Times-Bold",
     textAlign: "center",
     marginBottom: 14
   },
-
   examBlock: {
     marginBottom: 18
   },
-
   htmlLine: {
     marginBottom: 1,
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "baseline"
   },
-
   twoColLine: {
     flexDirection: "row",
     marginBottom: 1
@@ -128,7 +123,6 @@ const styles = StyleSheet.create({
     width: "38%",
     paddingLeft: 4
   },
-
   rinTable: {
     flexDirection: "row",
     marginTop: 2,
@@ -138,8 +132,6 @@ const styles = StyleSheet.create({
     width: "25%",
     paddingRight: 4
   },
-
-  // 🔥 IGUAL AO WORD
   resultText: {
     fontSize: 12,
     fontFamily: "Times-Bold"
@@ -246,10 +238,8 @@ const renderHTMLContent = (html: string) => {
     const hasTab = trimmedLine.includes("\t");
     const hasMultiSpaceColumns = /\s{5,}/.test(trimmedLine);
 
-    // FORMATAÇÃO ESPECIAL DO RIN (COAGULOGRAMA)
     if (upper.startsWith("RIN: 0,8") || upper.includes("= PROFILAXIA DE TVP")) {
       const cols = trimmedLine.split(/\s{5,}/);
-
       return (
         <View key={i} style={styles.rinTable}>
           {cols.slice(0, 4).map((col, idx) => (
@@ -275,7 +265,6 @@ const renderHTMLContent = (html: string) => {
       upper.includes("VALVULAS")
     ) {
       const cols = trimmedLine.split(/\s{5,}/);
-
       return (
         <View key={i} style={styles.rinTable}>
           {cols.slice(0, 4).map((col, idx) => (
@@ -290,7 +279,6 @@ const renderHTMLContent = (html: string) => {
     if (isMainResultLine) {
       const [left, ...rest] = trimmedLine.split(":");
       const right = rest.join(":").trim();
-
       return (
         <View key={i} style={styles.twoColLine}>
           <View style={styles.leftCol}>
@@ -324,7 +312,6 @@ const renderHTMLContent = (html: string) => {
               {left}
             </Text>
           </View>
-
           <View style={styles.rightCol}>
             <Text style={isRefLine ? styles.refText : styles.normalText}>
               {right}
@@ -351,13 +338,11 @@ const renderHTMLContent = (html: string) => {
 
 const getExamGroup = (examName: string) => {
   const n = (examName || "").trim().toUpperCase();
-
   if (n.includes("HEMOGRAMA")) return "HEMOGRAMA";
   if (n.includes("COAGULOGRAMA")) return "COAGULOGRAMA";
   if (n.includes("SUMÁRIO DE URINA") || n.includes("EAS")) return "URINA";
   if (n.includes("PARASITOLÓGICO DE FEZES")) return "FEZES";
   if (n.includes("BETA HCG")) return "BETA_HCG";
-
   return "GERAL";
 };
 
@@ -403,9 +388,7 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
     grouped[key] = grouped[key].sort((a, b) => {
       const orderA = a.exams?.pre_reports?.[0]?.order_index ?? 999;
       const orderB = b.exams?.pre_reports?.[0]?.order_index ?? 999;
-
       if (orderA !== orderB) return orderA - orderB;
-
       const nameA = (a.exams?.name || "").toUpperCase();
       const nameB = (b.exams?.name || "").toUpperCase();
       return nameA.localeCompare(nameB);
@@ -429,7 +412,6 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
                 <Text style={styles.label}>
                   PACIENTE: <Text style={styles.value}>{patientName}</Text>
                 </Text>
-
                 <Text style={styles.label}>
                   DATA DE NASCIMENTO:{" "}
                   <Text style={styles.value}>
@@ -437,19 +419,16 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
                   </Text>
                 </Text>
               </View>
-
               <View style={styles.patientRow}>
                 <Text style={styles.label}>
                   CPF: <Text style={styles.value}>{patient.cpf}</Text>
                 </Text>
-
                 <Text style={styles.label}>
                   DATA:{" "}
                   <Text style={styles.value}>
                     {formatSafeDate(service.created_at)}
                   </Text>
                 </Text>
-
                 <Text style={styles.label}>
                   REGISTRO:{" "}
                   <Text style={styles.value}>
@@ -461,11 +440,16 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
 
             <Text style={styles.pageTitle}>{getGroupTitle(groupKey)}</Text>
 
-            {examsInGroup.map((se: any) => (
-              <View key={se.id} style={styles.examBlock} wrap={false}>
-                {renderHTMLContent(se.result_value || "")}
-              </View>
-            ))}
+            {examsInGroup.map((se: any) => {
+              const isCoagulograma = groupKey === "COAGULOGRAMA";
+              const preReportContent = se.exams?.pre_reports?.[0]?.content || "";
+              const content = isCoagulograma ? preReportContent : (se.result_value || "");
+              return (
+                <View key={se.id} style={styles.examBlock} wrap={false}>
+                  {renderHTMLContent(content)}
+                </View>
+              );
+            })}
           </Page>
         );
       })}
@@ -518,7 +502,8 @@ const Reports = () => {
             name,
             pre_reports (
               sector,
-              order_index
+              order_index,
+              content
             )
           )
         )
