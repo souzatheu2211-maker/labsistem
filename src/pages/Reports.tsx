@@ -38,44 +38,23 @@ const formatSafeDate = (dateStr: string) => {
 const abbreviateName = (fullName: string, maxLength: number = 36) => {
   if (!fullName) return "";
   const upper = fullName.toUpperCase();
+
   if (upper.length <= maxLength) return upper;
+
   const parts = upper.split(" ").filter(Boolean);
   if (parts.length <= 2) return upper.substring(0, maxLength - 3) + "...";
+
   const first = parts[0];
   const last = parts[parts.length - 1];
   const middle = parts.slice(1, parts.length - 1).map((p) => p[0] + ".");
+
   let abbreviated = [first, ...middle, last].join(" ");
   if (abbreviated.length <= maxLength) return abbreviated;
+
   abbreviated = [first, last].join(" ");
   if (abbreviated.length <= maxLength) return abbreviated;
+
   return upper.substring(0, maxLength - 3) + "...";
-};
-
-// Extrai os valores do result_value do coagulograma e substitui os (?) no template
-const fillCoagulogramaTemplate = (template: string, resultValue: string): string => {
-  if (!template || !resultValue) return template;
-
-  // Remove tags HTML do result_value
-  const plain = resultValue
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ");
-
-  const extract = (regex: RegExp): string => {
-    const match = plain.match(regex);
-    return match ? match[1].trim() : "?";
-  };
-
-  const tp   = extract(/TEMPO DE PROT[OÔ]MBINA\s*:\s*([\d.,]+\s*Seg)/i);
-  const at   = extract(/ATIVIDADE.*?DO PACIENTE\s*:\s*([\d.,]+)/i);
-  const rin  = extract(/RIN\s*:\s*([\d.,]+)/i);
-  const ttp  = extract(/TEMPO DE TROMBOPLASTINA PARCIAL\s*:\s*([\d.,]+\s*Seg)/i);
-  const ts   = extract(/TEMPO DE SANGRAMENTO\s*:\s*([\d.,]+\s*minutos?)/i);
-  const tc   = extract(/TEMPO DE COAGULA[ÇC][ÃA]O\s*:\s*([\d.,]+\s*minutos?)/i);
-
-  const values = [tp, at, rin, ttp, ts, tc];
-  let i = 0;
-  return template.replace(/\(\?\)/g, () => values[i++] ?? "?");
 };
 
 const styles = StyleSheet.create({
@@ -316,12 +295,17 @@ const renderHTMLContent = (html: string) => {
       const cols = hasTab
         ? trimmedLine.split("\t")
         : trimmedLine.split(/\s{5,}/);
+
       const left = cleanGarbage(cols[0] || "");
       const right = cleanGarbage(cols.slice(1).join(" ") || "");
+
       return (
         <View
           key={i}
-          style={{ ...styles.twoColLine, marginBottom: isRefLine ? 0 : 1 }}
+          style={{
+            ...styles.twoColLine,
+            marginBottom: isRefLine ? 0 : 1
+          }}
         >
           <View style={styles.leftCol}>
             <Text style={isRefLine ? styles.refText : styles.normalText}>
@@ -340,7 +324,9 @@ const renderHTMLContent = (html: string) => {
     return (
       <View
         key={i}
-        style={isRefLine ? { ...styles.htmlLine, marginBottom: 0 } : styles.htmlLine}
+        style={
+          isRefLine ? { ...styles.htmlLine, marginBottom: 0 } : styles.htmlLine
+        }
       >
         <Text style={isRefLine ? styles.refText : styles.normalText}>
           {trimmedLine}
@@ -369,10 +355,18 @@ const getGroupTitle = (group: string) => {
   return "EXAMES LABORATORIAIS";
 };
 
-const labOrder = ["HEMOGRAMA", "COAGULOGRAMA", "URINA", "FEZES", "BETA_HCG", "GERAL"];
+const labOrder = [
+  "HEMOGRAMA",
+  "COAGULOGRAMA",
+  "URINA",
+  "FEZES",
+  "BETA_HCG",
+  "GERAL"
+];
 
 const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
   const timbreUrl = `${window.location.origin}/timbre.png`;
+
   const allExams = [...(service.service_exams || [])];
 
   const grouped: Record<string, any[]> = {
@@ -420,7 +414,9 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
                 </Text>
                 <Text style={styles.label}>
                   DATA DE NASCIMENTO:{" "}
-                  <Text style={styles.value}>{formatSafeDate(patient.birth_date)}</Text>
+                  <Text style={styles.value}>
+                    {formatSafeDate(patient.birth_date)}
+                  </Text>
                 </Text>
               </View>
               <View style={styles.patientRow}>
@@ -429,11 +425,15 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
                 </Text>
                 <Text style={styles.label}>
                   DATA:{" "}
-                  <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text>
+                  <Text style={styles.value}>
+                    {formatSafeDate(service.created_at)}
+                  </Text>
                 </Text>
                 <Text style={styles.label}>
                   REGISTRO:{" "}
-                  <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text>
+                  <Text style={styles.value}>
+                    #{service.id.slice(0, 8).toUpperCase()}
+                  </Text>
                 </Text>
               </View>
             </View>
@@ -443,9 +443,7 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
             {examsInGroup.map((se: any) => {
               const isCoagulograma = groupKey === "COAGULOGRAMA";
               const preReportContent = se.exams?.pre_reports?.[0]?.content || "";
-              const content = isCoagulograma
-                ? fillCoagulogramaTemplate(preReportContent, se.result_value || "")
-                : (se.result_value || "");
+              const content = isCoagulograma ? preReportContent : (se.result_value || "");
               return (
                 <View key={se.id} style={styles.examBlock} wrap={false}>
                   {renderHTMLContent(content)}
@@ -488,6 +486,7 @@ const Reports = () => {
       .select("*")
       .or(`full_name.ilike.%${search}%,cpf.ilike.%${search}%`)
       .limit(5);
+
     setPatients(data || []);
     setLoading(false);
   };
@@ -512,6 +511,7 @@ const Reports = () => {
       .eq("patient_id", patientId)
       .eq("status", "finalizado")
       .order("created_at", { ascending: false });
+
     setServices(data || []);
   };
 
@@ -557,7 +557,9 @@ const Reports = () => {
                   className="w-full flex items-center justify-between p-4 hover:bg-blue-900/40 border-b border-white/5 last:border-none transition-all"
                 >
                   <div className="text-left">
-                    <p className="text-sm font-bold text-white uppercase">{p.full_name}</p>
+                    <p className="text-sm font-bold text-white uppercase">
+                      {p.full_name}
+                    </p>
                     <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">
                       CPF: {p.cpf}
                     </p>
@@ -615,8 +617,13 @@ const Reports = () => {
               </div>
 
               <PDFDownloadLink
-                document={<LabReportPDF service={service} patient={selectedPatient} />}
-                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${formatSafeDate(service.created_at).replace(/\//g, "")}.pdf`}
+                document={
+                  <LabReportPDF service={service} patient={selectedPatient} />
+                }
+                fileName={`Laudo_${selectedPatient.full_name.replace(
+                  /\s+/g,
+                  "_"
+                )}_${formatSafeDate(service.created_at).replace(/\//g, "")}.pdf`}
               >
                 {({ loading: pdfLoading }) => (
                   <Button
@@ -626,7 +633,9 @@ const Reports = () => {
                     {pdfLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <><Download className="w-4 h-4" /> Baixar PDF</>
+                      <>
+                        <Download className="w-4 h-4" /> Baixar PDF
+                      </>
                     )}
                   </Button>
                 )}
