@@ -13,7 +13,8 @@ import {
   FlaskConical,
   Type,
   RotateCcw,
-  LayoutTemplate
+  LayoutTemplate,
+  AlertCircle
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ const Results = () => {
   const [manualText, setManualText] = useState('');
   const [isManualMode, setIsManualMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   useEffect(() => {
     fetchPendingServices();
@@ -63,6 +65,7 @@ const Results = () => {
   };
 
   const getParamLabels = (text: string) => {
+    if (!text) return [];
     const parts = text.split('(?)');
     return parts.slice(0, -1).map(part => {
       const lines = part.trim().split('\n');
@@ -77,36 +80,43 @@ const Results = () => {
     setManualText(content);
     const count = (content.match(/\(\?\)/g) || []).length;
     setParameters(new Array(count).fill(''));
-    setIsManualMode(count === 0); // Se não tem campos (?), entra em modo manual direto
+    setIsManualMode(count === 0);
   };
 
   const handleSelectExam = async (se: any) => {
     setSelectedExam(se);
     setAvailableTemplates([]);
+    setLoadingTemplates(true);
     
-    // Buscar todos os modelos para este exame
-    const { data: templates } = await supabase
-      .from('pre_reports')
-      .select('*')
-      .eq('exam_id', se.exam_id);
+    try {
+      // Busca modelos específicos para este exame
+      const { data: templates, error } = await supabase
+        .from('pre_reports')
+        .select('*')
+        .eq('exam_id', se.exam_id)
+        .order('name');
 
-    setAvailableTemplates(templates || []);
+      if (error) throw error;
 
-    if (se.result_value) {
-      // Se já tem resultado salvo, carrega ele
-      setManualText(se.result_value);
-      setTemplate('');
-      setParameters([]);
-      setIsManualMode(true);
-    } else if (templates && templates.length > 0) {
-      // Se não tem resultado mas tem modelos, aplica o primeiro por padrão
-      applyTemplate(templates[0].content);
-    } else {
-      // Sem resultado e sem modelos
-      setManualText('');
-      setTemplate('');
-      setParameters([]);
-      setIsManualMode(true);
+      setAvailableTemplates(templates || []);
+
+      if (se.result_value) {
+        setManualText(se.result_value);
+        setTemplate('');
+        setParameters([]);
+        setIsManualMode(true);
+      } else if (templates && templates.length > 0) {
+        applyTemplate(templates[0].content);
+      } else {
+        setManualText('');
+        setTemplate('');
+        setParameters([]);
+        setIsManualMode(true);
+      }
+    } catch (err: any) {
+      showError("Erro ao carregar modelos: " + err.message);
+    } finally {
+      setLoadingTemplates(false);
     }
   };
 
@@ -290,25 +300,33 @@ const Results = () => {
                       <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <LayoutTemplate className="w-4 h-4" /> Modelos Disponíveis
                       </h3>
-                      <div className="space-y-2">
-                        {availableTemplates.map((t) => (
-                          <button
-                            key={t.id}
-                            onClick={() => applyTemplate(t.content)}
-                            className={cn(
-                              "w-full p-3 rounded-xl border text-left transition-all group",
-                              template === t.content 
-                                ? "bg-blue-600/20 border-blue-500 text-blue-100" 
-                                : "bg-blue-900/10 border-white/5 text-blue-300/40 hover:border-blue-500/30"
-                            )}
-                          >
-                            <p className="text-[10px] font-bold uppercase tracking-tight">{t.name}</p>
-                          </button>
-                        ))}
-                        {availableTemplates.length === 0 && (
-                          <p className="text-[9px] text-blue-300/20 font-bold uppercase text-center py-4">Nenhum modelo vinculado</p>
-                        )}
-                      </div>
+                      
+                      {loadingTemplates ? (
+                        <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 text-blue-500 animate-spin" /></div>
+                      ) : (
+                        <div className="space-y-2">
+                          {availableTemplates.map((t) => (
+                            <button
+                              key={t.id}
+                              onClick={() => applyTemplate(t.content)}
+                              className={cn(
+                                "w-full p-3 rounded-xl border text-left transition-all group",
+                                template === t.content 
+                                  ? "bg-blue-600/20 border-blue-500 text-blue-100" 
+                                  : "bg-blue-900/10 border-white/5 text-blue-300/40 hover:border-blue-500/30"
+                              )}
+                            >
+                              <p className="text-[10px] font-bold uppercase tracking-tight">{t.name}</p>
+                            </button>
+                          ))}
+                          {availableTemplates.length === 0 && (
+                            <div className="flex flex-col items-center gap-2 py-4 opacity-30">
+                              <AlertCircle className="w-5 h-5" />
+                              <p className="text-[9px] font-bold uppercase text-center">Nenhum modelo para este exame</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Valores do Exame */}
