@@ -125,11 +125,9 @@ const formatFinalReport = (text: string) => {
     cleaned = cleaned.replace(/\s{2,}/g, ' ');
 
     // 4. Regra de Símbolos Soltos: Se a linha contém apenas unidades ou labels sem valor real
-    // Ex: "Glicose: mg/dl" -> vira apenas "Glicose:" ou é removida se for irrelevante
     const units = ['mg/dl', 'U/L', 'g/dL', 'mm/h', 'pg', 'fL', 'mcg/dL', 'ng/mL', 'mUI/L'];
     const hasUnit = units.some(u => cleaned.toLowerCase().includes(u.toLowerCase()));
     
-    // Se a linha tem unidade mas não tem números ou palavras de resultado (como 'reagente'), limpamos a unidade
     const hasValue = /[0-9]/.test(cleaned) || /reagente|positivo|negativo|ausência|presença/i.test(cleaned);
     
     if (hasUnit && !hasValue) {
@@ -140,7 +138,7 @@ const formatFinalReport = (text: string) => {
     }
 
     return cleaned.trim();
-  }).filter(line => line.length > 0); // Remove linhas que ficaram totalmente vazias
+  }).filter(line => line.length > 0);
 };
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
@@ -163,7 +161,8 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
     groups[sector].push(se);
   });
 
-  const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
+  // Agora aponta para a raiz (pasta public)
+  const timbreUrl = `${window.location.origin}/timbre.png`;
 
   return (
     <Document title={`Laudo - ${patient.full_name}`}>

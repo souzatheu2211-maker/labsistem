@@ -35,7 +35,7 @@ const Index = () => {
               <div className="absolute -inset-1 bg-blue-500/20 rounded-[3rem] blur-2xl opacity-50 group-hover:opacity-100 transition duration-1000"></div>
               <div className="relative rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl">
                 <img 
-                  src="/src/assets/illustration.png" 
+                  src="/illustration.png" 
                   alt="Laboratório" 
                   className="w-full h-auto object-cover grayscale-[10%] hover:grayscale-0 transition-all duration-700 hover:scale-105"
                 />
@@ -50,7 +50,7 @@ const Index = () => {
             <div className="relative mb-8 animate-in fade-in slide-in-from-top duration-700">
               <div className="absolute -inset-10 bg-blue-500/15 rounded-full blur-3xl animate-pulse"></div>
               <img 
-                src="/src/assets/logo.png" 
+                src="/logo.png" 
                 alt="Lab Acajutiba" 
                 className="relative w-56 h-auto drop-shadow-[0_0_20px_rgba(59,130,246,0.4)]"
               />
