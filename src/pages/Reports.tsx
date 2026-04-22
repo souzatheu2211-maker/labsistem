@@ -37,7 +37,7 @@ const formatSafeDate = (dateStr: string) => {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 180,    
+    paddingTop: 200,    
     paddingBottom: 60,  
     paddingHorizontal: 50,
     fontFamily: 'Times-Roman', 
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: 'absolute',
-    top: 125, 
+    top: 150, 
     left: 50,
     right: 50,
     borderBottom: 1,
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   resultText: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'Times-Bold',
   },
   normalText: {
@@ -98,6 +98,16 @@ const styles = StyleSheet.create({
     marginTop: 2,
   }
 });
+
+const reduceReferenceLine = (text: string) => {
+  return text
+    .replace(/Valor de Referência:/gi, "Ref:")
+    .replace(/Crianças e Adultos/gi, "")
+    .replace(/NORMAL[-]+/gi, "Normal:")
+    .replace(/ALTERADA[-]+/gi, "Alterada:")
+    .replace(/\s+/g, " ")
+    .trim();
+};
 
 const renderHTMLContent = (html: string) => {
   if (!html) return null;
@@ -122,6 +132,14 @@ const renderHTMLContent = (html: string) => {
       trimmedLine.toUpperCase().includes('ALTERADA') ||
       trimmedLine.toUpperCase().includes('REF:');
 
+    // Identifica se a linha é um resultado principal (nome do exame + valor)
+    const isMainResultLine =
+      trimmedLine.includes(":") &&
+      trimmedLine.match(/\(\?\)|\d/) &&
+      !trimmedLine.toUpperCase().includes("VALOR DE REFERÊNCIA") &&
+      !trimmedLine.toUpperCase().includes("MÉTODO") &&
+      !trimmedLine.toUpperCase().includes("REFERÊNCIA");
+
     // Divide a linha para identificar partes em negrito
     const parts = line.split(/(<b>.*?<\/b>|<strong>.*?<\/strong>)/g);
     
@@ -132,9 +150,12 @@ const renderHTMLContent = (html: string) => {
           let text = part.replace(/<[^>]*>/g, '');
           
           let textStyle = styles.normalText;
-          
+
           if (isRefLine) {
             textStyle = styles.refText;
+            text = reduceReferenceLine(text);
+          } else if (isMainResultLine) {
+            textStyle = styles.resultText;
           } else if (isBold) {
             textStyle = styles.resultText;
           }
