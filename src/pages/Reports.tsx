@@ -96,21 +96,25 @@ const styles = StyleSheet.create({
     fontFamily: "Times-Roman",
     color: "#000000"
   },
+
   pageTitle: {
     fontSize: 14,
     fontFamily: "Times-Bold",
     textAlign: "center",
     marginBottom: 14
   },
+
   examBlock: {
     marginBottom: 18
   },
+
   htmlLine: {
     marginBottom: 1,
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "baseline"
   },
+
   twoColLine: {
     flexDirection: "row",
     marginBottom: 1
@@ -123,15 +127,20 @@ const styles = StyleSheet.create({
     width: "38%",
     paddingLeft: 4
   },
-  rinTable: {
+
+  // COAGULOGRAMA - bloco RIN organizado
+  rinRow: {
     flexDirection: "row",
-    marginTop: 2,
     marginBottom: 2
   },
-  rinCol: {
-    width: "25%",
-    paddingRight: 4
+  rinLeft: {
+    width: "35%",
+    paddingRight: 6
   },
+  rinRight: {
+    width: "65%"
+  },
+
   resultText: {
     fontSize: 12,
     fontFamily: "Times-Bold"
@@ -144,7 +153,7 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: "#333333",
     fontFamily: "Times-Roman",
-    lineHeight: 1.05
+    lineHeight: 1.1
   }
 });
 
@@ -158,7 +167,7 @@ const cleanGarbage = (text: string) => {
     .trim();
 };
 
-const renderHTMLContent = (html: string) => {
+const renderHTMLContent = (html: string, examName: string) => {
   if (!html) return null;
 
   const cleanHtml = html
@@ -171,6 +180,9 @@ const renderHTMLContent = (html: string) => {
     .replace(/<\/span>/g, "");
 
   const lines = cleanHtml.split("\n");
+  const examUpper = (examName || "").trim().toUpperCase();
+
+  let coagRinMode = false;
 
   return lines.map((line, i) => {
     let trimmedLine = line.trim();
@@ -180,7 +192,6 @@ const renderHTMLContent = (html: string) => {
     if (!trimmedLine) return <View key={i} style={{ height: 6 }} />;
 
     trimmedLine = trimmedLine.replace(/[\u200B-\u200D\uFEFF]/g, "");
-
     const upper = trimmedLine.toUpperCase();
 
     const isRefLine =
@@ -226,7 +237,53 @@ const renderHTMLContent = (html: string) => {
       upper.includes("ATAQUE ISQUEMICO") ||
       upper.includes("VÁLVULAS") ||
       upper.includes("VALVULAS") ||
-      upper.includes("ENXERTOS");
+      upper.includes("ENXERTOS") ||
+      upper.includes("FAIXA TERAPÊUTICA") ||
+      upper.includes("FAIXA TERAPEUTICA");
+
+    // ATIVA MODO RIN DO COAG
+    if (examUpper === "COAGULOGRAMA" && upper.startsWith("VALORES REFERENCIAIS:")) {
+      coagRinMode = true;
+    }
+
+    // FINALIZA MODO RIN DO COAG QUANDO COMEÇA NOVA SEÇÃO
+    if (
+      examUpper === "COAGULOGRAMA" &&
+      coagRinMode &&
+      (upper.startsWith("MATERIAL: PLASMA") ||
+        upper.startsWith("TEMPO DE TROMBOPLASTINA") ||
+        upper.startsWith("TEMPO DE SANGRAMENTO") ||
+        upper.startsWith("TEMPO DE COAGULAÇÃO"))
+    ) {
+      coagRinMode = false;
+    }
+
+    // BLOCO ESPECIAL DO COAGULOGRAMA PARA LINHAS RIN
+    if (examUpper === "COAGULOGRAMA" && coagRinMode) {
+      if (upper.startsWith("RIN:")) {
+        const left = trimmedLine.split("=")[0].trim();
+        const right = trimmedLine.includes("=")
+          ? trimmedLine.split("=").slice(1).join("=").trim()
+          : "";
+
+        return (
+          <View key={i} style={styles.rinRow}>
+            <View style={styles.rinLeft}>
+              <Text style={styles.refText}>{left}</Text>
+            </View>
+            <View style={styles.rinRight}>
+              <Text style={styles.refText}>{right ? "= " + right : ""}</Text>
+            </View>
+          </View>
+        );
+      }
+
+      return (
+        <View key={i} style={styles.htmlLine}>
+          <Text style={styles.refText}>{trimmedLine}</Text>
+        </View>
+      );
+    }
 
     const isMainResultLine =
       trimmedLine.includes(":") &&
@@ -238,47 +295,10 @@ const renderHTMLContent = (html: string) => {
     const hasTab = trimmedLine.includes("\t");
     const hasMultiSpaceColumns = /\s{5,}/.test(trimmedLine);
 
-    if (upper.startsWith("RIN: 0,8") || upper.includes("= PROFILAXIA DE TVP")) {
-      const cols = trimmedLine.split(/\s{5,}/);
-      return (
-        <View key={i} style={styles.rinTable}>
-          {cols.slice(0, 4).map((col, idx) => (
-            <View key={idx} style={styles.rinCol}>
-              <Text style={styles.refText}>{cleanGarbage(col)}</Text>
-            </View>
-          ))}
-        </View>
-      );
-    }
-
-    if (
-      upper.startsWith("DESEJÁVEL") ||
-      upper.startsWith("DESEJAVEL") ||
-      upper.includes("CIRURGIA DE ALTO RISCO") ||
-      upper.includes("EMBOLIA PULMONAR") ||
-      upper.includes("INFARTO DO MIOCÁRDIO") ||
-      upper.includes("INFARTO DO MIOCARDIO") ||
-      upper.includes("ATAQUE ISQUÊMICO") ||
-      upper.includes("ATAQUE ISQUEMICO") ||
-      upper.includes("ENXERTOS") ||
-      upper.includes("VÁLVULAS") ||
-      upper.includes("VALVULAS")
-    ) {
-      const cols = trimmedLine.split(/\s{5,}/);
-      return (
-        <View key={i} style={styles.rinTable}>
-          {cols.slice(0, 4).map((col, idx) => (
-            <View key={idx} style={styles.rinCol}>
-              <Text style={styles.refText}>{cleanGarbage(col)}</Text>
-            </View>
-          ))}
-        </View>
-      );
-    }
-
     if (isMainResultLine) {
       const [left, ...rest] = trimmedLine.split(":");
       const right = rest.join(":").trim();
+
       return (
         <View key={i} style={styles.twoColLine}>
           <View style={styles.leftCol}>
@@ -312,6 +332,7 @@ const renderHTMLContent = (html: string) => {
               {left}
             </Text>
           </View>
+
           <View style={styles.rightCol}>
             <Text style={isRefLine ? styles.refText : styles.normalText}>
               {right}
@@ -338,11 +359,13 @@ const renderHTMLContent = (html: string) => {
 
 const getExamGroup = (examName: string) => {
   const n = (examName || "").trim().toUpperCase();
+
   if (n.includes("HEMOGRAMA")) return "HEMOGRAMA";
   if (n.includes("COAGULOGRAMA")) return "COAGULOGRAMA";
   if (n.includes("SUMÁRIO DE URINA") || n.includes("EAS")) return "URINA";
   if (n.includes("PARASITOLÓGICO DE FEZES")) return "FEZES";
   if (n.includes("BETA HCG")) return "BETA_HCG";
+
   return "GERAL";
 };
 
@@ -388,7 +411,9 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
     grouped[key] = grouped[key].sort((a, b) => {
       const orderA = a.exams?.pre_reports?.[0]?.order_index ?? 999;
       const orderB = b.exams?.pre_reports?.[0]?.order_index ?? 999;
+
       if (orderA !== orderB) return orderA - orderB;
+
       const nameA = (a.exams?.name || "").toUpperCase();
       const nameB = (b.exams?.name || "").toUpperCase();
       return nameA.localeCompare(nameB);
@@ -412,6 +437,7 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
                 <Text style={styles.label}>
                   PACIENTE: <Text style={styles.value}>{patientName}</Text>
                 </Text>
+
                 <Text style={styles.label}>
                   DATA DE NASCIMENTO:{" "}
                   <Text style={styles.value}>
@@ -419,16 +445,19 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
                   </Text>
                 </Text>
               </View>
+
               <View style={styles.patientRow}>
                 <Text style={styles.label}>
                   CPF: <Text style={styles.value}>{patient.cpf}</Text>
                 </Text>
+
                 <Text style={styles.label}>
                   DATA:{" "}
                   <Text style={styles.value}>
                     {formatSafeDate(service.created_at)}
                   </Text>
                 </Text>
+
                 <Text style={styles.label}>
                   REGISTRO:{" "}
                   <Text style={styles.value}>
@@ -440,16 +469,11 @@ const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
 
             <Text style={styles.pageTitle}>{getGroupTitle(groupKey)}</Text>
 
-            {examsInGroup.map((se: any) => {
-              const isCoagulograma = groupKey === "COAGULOGRAMA";
-              const preReportContent = se.exams?.pre_reports?.[0]?.content || "";
-              const content = isCoagulograma ? preReportContent : (se.result_value || "");
-              return (
-                <View key={se.id} style={styles.examBlock} wrap={false}>
-                  {renderHTMLContent(content)}
-                </View>
-              );
-            })}
+            {examsInGroup.map((se: any) => (
+              <View key={se.id} style={styles.examBlock} wrap={false}>
+                {renderHTMLContent(se.result_value || "", se.exams?.name || "")}
+              </View>
+            ))}
           </Page>
         );
       })}
@@ -502,8 +526,7 @@ const Reports = () => {
             name,
             pre_reports (
               sector,
-              order_index,
-              content
+              order_index
             )
           )
         )
