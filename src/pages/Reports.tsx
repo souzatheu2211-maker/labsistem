@@ -40,9 +40,9 @@ const formatSafeDate = (dateStr: string) => {
 // Configuração de Estilos para o PDF (A4) - Focado em Times e Minimalismo
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 160,    
+    paddingTop: 165,    
     paddingBottom: 60,  
-    paddingHorizontal: 50,
+    paddingHorizontal: 60, // Margem lateral maior para o conteúdo
     fontFamily: 'Times-Roman',
     backgroundColor: '#ffffff',
   },
@@ -55,56 +55,55 @@ const styles = StyleSheet.create({
   },
   patientInfoFixed: {
     position: 'absolute',
-    top: 110, 
-    left: 50,
-    right: 50,
-    paddingBottom: 15,
-    // Linha removida conforme solicitado
+    top: 118, // Ajustado para encaixar entre as linhas do timbre
+    left: 65, // Margem interna para não vazar a linha lateral
+    right: 65,
+    paddingBottom: 5,
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 2, // Linhas mais juntas
   },
   label: {
-    fontSize: 11, 
+    fontSize: 10, // Fonte levemente menor para garantir que caiba
     fontFamily: 'Times-Bold',
     textTransform: 'uppercase',
   },
   value: {
-    fontSize: 11, 
+    fontSize: 10, 
     fontFamily: 'Times-Roman',
   },
   sectorTitle: {
-    fontSize: 11,
+    fontSize: 10.5,
     textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 10,
+    marginTop: 15,
+    marginBottom: 8,
     textTransform: 'uppercase',
     fontFamily: 'Times-Bold',
     textDecoration: 'underline',
   },
   examBlock: {
-    marginBottom: 20, 
+    marginBottom: 15, 
   },
   examName: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontFamily: 'Times-Bold',
-    marginBottom: 5,
+    marginBottom: 3,
     textTransform: 'uppercase',
   },
   resultText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontFamily: 'Times-Roman',
-    lineHeight: 1.3,
+    lineHeight: 1.2,
     color: '#000000',
     whiteSpace: 'pre-wrap',
   },
   referenceText: {
-    fontSize: 9, 
+    fontSize: 8.5, 
     fontFamily: 'Times-Italic',
     color: '#222222',
-    marginTop: 2,
+    marginTop: 1,
   }
 });
 
