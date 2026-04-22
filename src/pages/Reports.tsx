@@ -9,13 +9,14 @@ import {
   Loader2,
   CheckCircle2,
   Calendar,
-  Download
+  Download,
+  Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { showSuccess, showError } from "@/utils/toast";
-import { format, differenceInYears } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { 
   Document, 
   Page, 
@@ -26,134 +27,85 @@ import {
   Image
 } from "@react-pdf/renderer";
 
-// Dimensões A4: 210mm x 297mm
-// No react-pdf, 1pt = 1/72 polegada. 1mm = 2.834pt.
-// Largura A4: 595.28pt | Altura A4: 841.89pt
+// Função para formatar data sem erro de fuso horário (UTC para Local)
+const formatSafeDate = (dateStr: string) => {
+  if (!dateStr) return "";
+  if (dateStr.length === 10) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return format(new Date(year, month - 1, day), "dd/MM/yyyy");
+  }
+  return format(parseISO(dateStr), "dd/MM/yyyy");
+};
+
+// Configuração de Estilos para o PDF (A4)
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 180, // Espaço exato para o cabeçalho fixo (Timbre + Info)
-    paddingBottom: 80,
+    paddingTop: 170,    
+    paddingBottom: 80,  
     paddingHorizontal: 50,
     fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
   },
-  headerContainer: {
+  background: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 170,
-    paddingHorizontal: 50,
-    paddingTop: 15,
+    bottom: 0,
   },
-  timbreWrapper: {
-    width: '100%',
-    height: 110, // Altura fixa entre 35mm e 45mm (~113pt)
-    marginBottom: 5,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timbreImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'contain', // CRÍTICO: Mantém a proporção original sem distorcer
-  },
-  patientBox: {
-    width: '100%',
-    borderTopWidth: 1,
-    borderTopColor: '#000000',
-    borderBottomWidth: 1,
-    borderBottomColor: '#000000',
-    paddingVertical: 6,
-    marginTop: 2,
+  patientInfoFixed: {
+    position: 'absolute',
+    top: 115, 
+    left: 50,
+    right: 50,
+    paddingBottom: 10,
   },
   patientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 3,
+    marginBottom: 5,
   },
   label: {
-    fontSize: 9,
+    fontSize: 13, 
     fontWeight: 'bold',
-    textTransform: 'uppercase',
   },
   value: {
-    fontSize: 10,
-    fontWeight: 'normal',
+    fontSize: 13, 
   },
-  content: {
-    marginTop: 10,
-  },
-  sectorHeader: {
-    fontSize: 11,
-    fontWeight: 'bold',
+  sectorTitle: {
+    fontSize: 12,
     textAlign: 'center',
-    backgroundColor: '#f2f2f2',
-    paddingVertical: 4,
+    textDecoration: 'underline',
     marginTop: 15,
     marginBottom: 10,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  examContainer: {
-    marginBottom: 20,
-  },
-  examTitle: {
-    fontSize: 10,
     fontWeight: 'bold',
-    textDecoration: 'underline',
-    marginBottom: 6,
+  },
+  examBlock: {
+    marginBottom: 20, 
+  },
+  examName: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 4,
     textTransform: 'uppercase',
   },
-  resultLine: {
-    fontSize: 10,
-    lineHeight: 1.5,
+  resultText: {
+    fontSize: 12, // Fonte 12 conforme solicitado
+    fontFamily: 'Courier', 
+    lineHeight: 1.2,
     color: '#000000',
   },
-  referenceLine: {
-    fontSize: 8,
-    color: '#555555',
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
-  signatureContainer: {
-    position: 'absolute',
-    bottom: 90,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  line: {
-    width: 200,
-    borderTopWidth: 0.5,
-    borderTopColor: '#000000',
-    marginBottom: 4,
-  },
-  signatureName: {
-    fontSize: 9,
-    fontWeight: 'bold',
-  },
-  signatureRole: {
-    fontSize: 7,
+  referenceText: {
+    fontSize: 9, // Fonte menor para referências
+    fontFamily: 'Courier',
     color: '#333333',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontSize: 7,
-    color: '#999999',
-    borderTopWidth: 0.5,
-    borderTopColor: '#eeeeee',
-    paddingTop: 8,
+    marginTop: 1,
   }
 });
 
 const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
-  const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA", "OUTROS"];
+  const sectorOrder = ["HEMATOLOGIA", "BIOQUÍMICA", "IMUNOLOGIA / HORMÔNIOS", "URINÁLISE", "PARASITOLOGIA"];
   
   const getSector = (examName: string) => {
     const name = examName.toUpperCase();
@@ -162,7 +114,7 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
     if (name.includes("URINA") || name.includes("EAS")) return "URINÁLISE";
     if (name.includes("FEZES") || name.includes("PARASITO")) return "PARASITOLOGIA";
     if (name.includes("PSA") || name.includes("BETA") || name.includes("TSH") || name.includes("T4")) return "IMUNOLOGIA / HORMÔNIOS";
-    return "OUTROS";
+    return "HEMATOLOGIA";
   };
 
   const groups: { [key: string]: any[] } = {};
@@ -174,72 +126,60 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
 
   const timbreUrl = `${window.location.origin}/src/assets/timbre.png`;
 
+  // Função de limpeza profunda de lixo visual
+  const cleanVisualTrash = (text: string) => {
+    if (!text) return "";
+    return text
+      .replace(/\([\s?&]*\)/g, '') // Remove (?), (&), ( ? ), ( &&& ), etc.
+      .replace(/[?&]{2,}/g, '')    // Remove sequências como ???? ou &&&&
+      .replace(/\(\s*\)/g, '');    // Remove parênteses vazios que sobraram
+  };
+
   return (
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
-        {/* Cabeçalho Fixo em Todas as Páginas */}
-        <View fixed style={styles.headerContainer}>
-          <View style={styles.timbreWrapper}>
-            <Image src={timbreUrl} style={styles.timbreImage} />
+        <Image src={timbreUrl} style={styles.background} fixed />
+
+        <View style={styles.patientInfoFixed} fixed>
+          <View style={styles.patientRow}>
+            <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
+            <Text style={styles.label}>REGISTRO: <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
           </View>
-          <View style={styles.patientBox}>
-            <View style={styles.patientRow}>
-              <Text style={styles.label}>Paciente: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
-              <Text style={styles.label}>Registro: <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
-            </View>
-            <View style={styles.patientRow}>
-              <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
-              <Text style={styles.label}>Idade: <Text style={styles.value}>{differenceInYears(new Date(), new Date(patient.birth_date))} Anos</Text></Text>
-              <Text style={styles.label}>Data: <Text style={styles.value}>{format(new Date(service.created_at), "dd/MM/yyyy")}</Text></Text>
-            </View>
+          <View style={styles.patientRow}>
+            <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
+            <Text style={styles.label}>DN: <Text style={styles.value}>{formatSafeDate(patient.birth_date)}</Text></Text>
+            <Text style={styles.label}>DATA: <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text></Text>
           </View>
         </View>
 
-        {/* Conteúdo dos Exames */}
-        <View style={styles.content}>
-          {sectorOrder.map(sector => {
-            if (!groups[sector]) return null;
-            
-            return (
-              <View key={sector} wrap={false}>
-                <Text style={styles.sectorHeader}>{sector}</Text>
-                {groups[sector].map((se: any) => (
-                  <View key={se.id} style={styles.examContainer}>
-                    <Text style={styles.examTitle}>{se.exams?.name}</Text>
-                    {/* Limpeza rigorosa de placeholders (?) */}
-                    {se.result_value?.replace(/\(\?\)/g, '').split('\n').map((line: string, i: number) => {
-                      const isRef = line.toLowerCase().includes("referência") || 
-                                    line.toLowerCase().includes("ref:") || 
-                                    line.toLowerCase().includes("valor:") || 
-                                    line.toLowerCase().includes("vr:");
-                      return (
-                        <Text key={i} style={isRef ? styles.referenceLine : styles.resultLine}>
-                          {line.trim()}
-                        </Text>
-                      );
-                    })}
-                  </View>
-                ))}
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Assinatura Fixa */}
-        <View style={styles.signatureContainer} fixed>
-          <View style={styles.line} />
-          <Text style={styles.signatureName}>Matheus Souza</Text>
-          <Text style={styles.signatureRole}>Técnico em Patologia Clínica • CRF-BA 805.994</Text>
-        </View>
-
-        {/* Rodapé Fixo */}
-        <Text 
-          style={styles.footer} 
-          render={({ pageNumber, totalPages }) => (
-            `Lab Acajutiba - Inovação & Precisão | Página ${pageNumber} de ${totalPages}`
-          )} 
-          fixed 
-        />
+        {sectorOrder.map(sector => {
+          if (!groups[sector]) return null;
+          
+          return (
+            <View key={sector} wrap={false}>
+              <Text style={styles.sectorTitle}>{sector}</Text>
+              {groups[sector].map((se: any) => (
+                <View key={se.id} style={styles.examBlock} wrap={false}>
+                  <Text style={styles.examName}>{se.exams?.name}</Text>
+                  {cleanVisualTrash(se.result_value || "")
+                    .split('\n').map((line: string, i: number) => {
+                    const isRef = line.toLowerCase().includes("referência") || 
+                                  line.toLowerCase().includes("ref:") || 
+                                  line.toLowerCase().includes("valor:") || 
+                                  line.toLowerCase().includes("vr:") ||
+                                  line.toLowerCase().includes("normal:") ||
+                                  line.toLowerCase().includes("desejável:");
+                    return (
+                      <Text key={i} style={isRef ? styles.referenceText : styles.resultText}>
+                        {line}
+                      </Text>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          );
+        })}
       </Page>
     </Document>
   );
@@ -299,17 +239,17 @@ const Reports = () => {
       <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-700">
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
-            <FileText className="w-6 h-6 text-blue-400" />
-            Central de Laudos
+            <Printer className="w-6 h-6 text-blue-400" />
+            Impressão de Laudos
           </h1>
-          <p className="text-blue-300/50 text-sm mt-1 font-medium">Baixe os resultados oficiais em formato PDF estruturado</p>
+          <p className="text-blue-300/50 text-sm mt-1 font-medium">Busque pacientes e gere PDFs oficiais dos atendimentos finalizados</p>
         </div>
 
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">
           <div className="relative">
             <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
             <Input
-              placeholder="Pesquisar paciente por Nome ou CPF..."
+              placeholder="Buscar por Nome, CPF ou Registro..."
               className="bg-blue-900/20 border-blue-500/10 h-12 pl-12 rounded-2xl text-white font-bold"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -347,7 +287,7 @@ const Reports = () => {
                 <h3 className="text-lg font-bold text-white uppercase">{selectedPatient.full_name}</h3>
               </div>
             </div>
-            <Button variant="ghost" onClick={() => setSelectedPatient(null)} className="text-red-400 hover:bg-red-500/10 font-bold uppercase text-[10px]">Trocar</Button>
+            <Button variant="ghost" onClick={() => setSelectedPatient(null)} className="text-red-400 hover:bg-red-500/10 font-bold uppercase text-[10px]">Trocar Paciente</Button>
           </div>
         )}
 
@@ -359,21 +299,21 @@ const Reports = () => {
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-white font-bold uppercase text-sm">Atendimento de {format(new Date(service.created_at), "dd/MM/yyyy")}</h3>
+                  <h3 className="text-white font-bold uppercase text-sm">Atendimento de {formatSafeDate(service.created_at)}</h3>
                   <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">Registro: #{service.id.slice(0, 8).toUpperCase()}</p>
                 </div>
               </div>
               
               <PDFDownloadLink 
                 document={<LabReportPDF service={service} patient={selectedPatient} />} 
-                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${format(new Date(service.created_at), "ddMMyy")}.pdf`}
+                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${formatSafeDate(service.created_at).replace(/\//g, "")}.pdf`}
               >
                 {({ loading: pdfLoading }) => (
                   <Button 
-                    className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-6"
+                    className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-blue-900/20"
                     disabled={pdfLoading}
                   >
-                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar Laudo</>}
+                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar PDF</>}
                   </Button>
                 )}
               </PDFDownloadLink>
@@ -383,7 +323,7 @@ const Reports = () => {
           {services.length === 0 && selectedPatient && (
             <div className="flex flex-col items-center justify-center py-20 opacity-20">
               <FileText className="w-16 h-16 mb-4" />
-              <p className="text-lg font-bold uppercase tracking-widest">Nenhum laudo finalizado</p>
+              <p className="text-lg font-bold uppercase tracking-widest">Nenhum atendimento finalizado</p>
             </div>
           )}
         </div>
