@@ -16,20 +16,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
-import { 
-  Document, 
-  Page, 
-  Text, 
-  View, 
-  StyleSheet, 
-  PDFDownloadLink, 
+import {
+  Document,
+  Page,
+  Text,
+  View,
+  StyleSheet,
+  PDFDownloadLink,
   Image
 } from "@react-pdf/renderer";
 
 const formatSafeDate = (dateStr: string) => {
   if (!dateStr) return "";
   if (dateStr.length === 10) {
-    const [year, month, day] = dateStr.split('-').map(Number);
+    const [year, month, day] = dateStr.split("-").map(Number);
     return format(new Date(year, month - 1, day), "dd/MM/yyyy");
   }
   return format(parseISO(dateStr), "dd/MM/yyyy");
@@ -37,75 +37,75 @@ const formatSafeDate = (dateStr: string) => {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 200,    
-    paddingBottom: 60,  
+    paddingTop: 200,
+    paddingBottom: 60,
     paddingHorizontal: 50,
-    fontFamily: 'Times-Roman', 
-    backgroundColor: '#ffffff',
+    fontFamily: "Times-Roman",
+    backgroundColor: "#ffffff"
   },
   background: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
+    bottom: 0
   },
   patientInfoFixed: {
-    position: 'absolute',
-    top: 150, 
+    position: "absolute",
+    top: 150,
     left: 50,
     right: 50,
     borderBottom: 1,
-    borderBottomColor: '#000000',
-    paddingBottom: 10,
+    borderBottomColor: "#000000",
+    paddingBottom: 10
   },
   patientRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 4
   },
   label: {
-    fontSize: 12, 
-    fontFamily: 'Times-Bold',
-    color: '#000000',
+    fontSize: 12,
+    fontFamily: "Times-Bold",
+    color: "#000000"
   },
   value: {
-    fontSize: 12, 
-    fontFamily: 'Times-Roman',
-    color: '#000000',
+    fontSize: 12,
+    fontFamily: "Times-Roman",
+    color: "#000000"
   },
   examBlock: {
-    marginBottom: 20, 
+    marginBottom: 20
   },
   htmlLine: {
-    marginBottom: 4,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'baseline',
+    marginBottom: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "baseline"
   },
   resultText: {
     fontSize: 14,
-    fontFamily: 'Times-Bold',
+    fontFamily: "Times-Bold"
   },
   normalText: {
     fontSize: 11,
-    fontFamily: 'Times-Roman',
+    fontFamily: "Times-Roman"
   },
   refText: {
-    fontSize: 8,
-    color: '#333333',
-    fontFamily: 'Times-Roman',
-    marginTop: 2,
+    fontSize: 6.5,
+    color: "#333333",
+    fontFamily: "Times-Roman",
+    lineHeight: 1.1
   }
 });
 
-const reduceReferenceLine = (text: string) => {
+const cleanGarbage = (text: string) => {
   return text
-    .replace(/Valor de Referência:/gi, "Ref:")
-    .replace(/Crianças e Adultos/gi, "")
-    .replace(/NORMAL[-]+/gi, "Normal:")
-    .replace(/ALTERADA[-]+/gi, "Alterada:")
-    .replace(/\s+/g, " ")
+    .replace(/&{2,}/g, "")       // remove &&&&&&
+    .replace(/_{2,}/g, "")       // remove ______
+    .replace(/\*{2,}/g, "")      // remove ******
+    .replace(/-{5,}/g, "")       // remove ------
+    .replace(/\s+\n/g, "\n")     // remove espaços antes de quebra
     .trim();
 };
 
@@ -113,53 +113,61 @@ const renderHTMLContent = (html: string) => {
   if (!html) return null;
 
   const cleanHtml = html
-    .replace(/<p>/g, '')
-    .replace(/<\/p>/g, '\n')
-    .replace(/<br\s*\/?>/g, '\n')
-    .replace(/<div>/g, '')
-    .replace(/<\/div>/g, '\n');
+    .replace(/<p>/g, "")
+    .replace(/<\/p>/g, "\n")
+    .replace(/<br\s*\/?>/g, "\n")
+    .replace(/<div>/g, "")
+    .replace(/<\/div>/g, "\n");
 
-  const lines = cleanHtml.split('\n');
+  const lines = cleanHtml.split("\n");
 
   return lines.map((line, i) => {
-    const trimmedLine = line.trim();
-    if (!trimmedLine) return <View key={i} style={{ height: 8 }} />;
+    let trimmedLine = line.trim();
+    if (!trimmedLine) return <View key={i} style={{ height: 6 }} />;
 
-    // Identifica se a linha é de referência
-    const isRefLine = 
-      trimmedLine.toUpperCase().includes('VALOR DE REFERÊNCIA') || 
-      trimmedLine.toUpperCase().includes('NORMAL') || 
-      trimmedLine.toUpperCase().includes('ALTERADA') ||
-      trimmedLine.toUpperCase().includes('REF:');
+    trimmedLine = cleanGarbage(trimmedLine);
 
-    // Identifica se a linha é um resultado principal (nome do exame + valor)
+    if (!trimmedLine) return <View key={i} style={{ height: 6 }} />;
+
+    const isRefLine =
+      trimmedLine.toUpperCase().includes("VALOR DE REFERÊNCIA") ||
+      trimmedLine.toUpperCase().includes("VALORES DE REFERÊNCIA") ||
+      trimmedLine.toUpperCase().includes("NORMAL") ||
+      trimmedLine.toUpperCase().includes("ALTERADA") ||
+      trimmedLine.toUpperCase().includes("REF:");
+
     const isMainResultLine =
       trimmedLine.includes(":") &&
       trimmedLine.match(/\(\?\)|\d/) &&
       !trimmedLine.toUpperCase().includes("VALOR DE REFERÊNCIA") &&
+      !trimmedLine.toUpperCase().includes("VALORES DE REFERÊNCIA") &&
       !trimmedLine.toUpperCase().includes("MÉTODO") &&
       !trimmedLine.toUpperCase().includes("REFERÊNCIA");
 
-    // Divide a linha para identificar partes em negrito
-    const parts = line.split(/(<b>.*?<\/b>|<strong>.*?<\/strong>)/g);
-    
+    const parts = trimmedLine.split(/(<b>.*?<\/b>|<strong>.*?<\/strong>)/g);
+
+    const lineStyle = isRefLine
+      ? { ...styles.htmlLine, marginBottom: 0 }
+      : styles.htmlLine;
+
     return (
-      <View key={i} style={styles.htmlLine}>
+      <View key={i} style={lineStyle}>
         {parts.map((part, j) => {
-          const isBold = part.startsWith('<b>') || part.startsWith('<strong>');
-          let text = part.replace(/<[^>]*>/g, '');
-          
+          const isBold = part.startsWith("<b>") || part.startsWith("<strong>");
+          let text = part.replace(/<[^>]*>/g, "");
+
+          text = cleanGarbage(text);
+
           let textStyle = styles.normalText;
 
           if (isRefLine) {
             textStyle = styles.refText;
-            text = reduceReferenceLine(text);
           } else if (isMainResultLine) {
             textStyle = styles.resultText;
           } else if (isBold) {
             textStyle = styles.resultText;
           }
-          
+
           return (
             <Text key={j} style={textStyle}>
               {text}
@@ -171,7 +179,7 @@ const renderHTMLContent = (html: string) => {
   });
 };
 
-const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
+const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
   const sortedExams = [...(service.service_exams || [])].sort((a, b) => {
     const orderA = a.exams?.pre_reports?.[0]?.order_index ?? 999;
     const orderB = b.exams?.pre_reports?.[0]?.order_index ?? 999;
@@ -184,21 +192,36 @@ const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
     <Document title={`Laudo - ${patient.full_name}`}>
       <Page size="A4" style={styles.page}>
         <Image src={timbreUrl} style={styles.background} fixed />
-        
-        {/* Cabeçalho Ajustado e Centralizado */}
+
         <View style={styles.patientInfoFixed} fixed>
           <View style={styles.patientRow}>
-            <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
-            <Text style={styles.label}>DN: <Text style={styles.value}>{formatSafeDate(patient.birth_date)}</Text></Text>
+            <Text style={styles.label}>
+              PACIENTE:{" "}
+              <Text style={styles.value}>
+                {patient.full_name.toUpperCase()}
+              </Text>
+            </Text>
+            <Text style={styles.label}>
+              DN: <Text style={styles.value}>{formatSafeDate(patient.birth_date)}</Text>
+            </Text>
           </View>
+
           <View style={styles.patientRow}>
-            <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
-            <Text style={styles.label}>DATA: <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text></Text>
-            <Text style={styles.label}>REGISTRO: <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
+            <Text style={styles.label}>
+              CPF: <Text style={styles.value}>{patient.cpf}</Text>
+            </Text>
+            <Text style={styles.label}>
+              DATA: <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text>
+            </Text>
+            <Text style={styles.label}>
+              REGISTRO:{" "}
+              <Text style={styles.value}>
+                #{service.id.slice(0, 8).toUpperCase()}
+              </Text>
+            </Text>
           </View>
         </View>
-        
-        {/* Conteúdo dos Exames */}
+
         {sortedExams.map((se: any) => (
           <View key={se.id} style={styles.examBlock} wrap={false}>
             {renderHTMLContent(se.result_value || "")}
@@ -238,6 +261,7 @@ const Reports = () => {
       .select("*")
       .or(`full_name.ilike.%${search}%,cpf.ilike.%${search}%`)
       .limit(5);
+
     setPatients(data || []);
     setLoading(false);
   };
@@ -279,7 +303,9 @@ const Reports = () => {
             <Printer className="w-6 h-6 text-blue-400" />
             Impressão de Laudos
           </h1>
-          <p className="text-blue-300/50 text-sm mt-1 font-medium">Busque pacientes e gere PDFs oficiais dos atendimentos finalizados</p>
+          <p className="text-blue-300/50 text-sm mt-1 font-medium">
+            Busque pacientes e gere PDFs oficiais dos atendimentos finalizados
+          </p>
         </div>
 
         <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">
@@ -291,7 +317,9 @@ const Reports = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            {loading && <Loader2 className="absolute right-4 top-3.5 h-5 w-5 text-blue-400 animate-spin" />}
+            {loading && (
+              <Loader2 className="absolute right-4 top-3.5 h-5 w-5 text-blue-400 animate-spin" />
+            )}
           </div>
 
           {patients.length > 0 && (
@@ -303,8 +331,12 @@ const Reports = () => {
                   className="w-full flex items-center justify-between p-4 hover:bg-blue-900/40 border-b border-white/5 last:border-none transition-all"
                 >
                   <div className="text-left">
-                    <p className="text-sm font-bold text-white uppercase">{p.full_name}</p>
-                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">CPF: {p.cpf}</p>
+                    <p className="text-sm font-bold text-white uppercase">
+                      {p.full_name}
+                    </p>
+                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">
+                      CPF: {p.cpf}
+                    </p>
                   </div>
                   <CheckCircle2 className="w-5 h-5 text-blue-500" />
                 </button>
@@ -320,37 +352,65 @@ const Reports = () => {
                 <User className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-xs font-black text-blue-400 uppercase tracking-widest">Paciente Selecionado</p>
-                <h3 className="text-lg font-bold text-white uppercase">{selectedPatient.full_name}</h3>
+                <p className="text-xs font-black text-blue-400 uppercase tracking-widest">
+                  Paciente Selecionado
+                </p>
+                <h3 className="text-lg font-bold text-white uppercase">
+                  {selectedPatient.full_name}
+                </h3>
               </div>
             </div>
-            <Button variant="ghost" onClick={() => setSelectedPatient(null)} className="text-red-400 hover:bg-red-500/10 font-bold uppercase text-[10px]">Trocar Paciente</Button>
+            <Button
+              variant="ghost"
+              onClick={() => setSelectedPatient(null)}
+              className="text-red-400 hover:bg-red-500/10 font-bold uppercase text-[10px]"
+            >
+              Trocar Paciente
+            </Button>
           </div>
         )}
 
         <div className="grid grid-cols-1 gap-4">
           {services.map((service) => (
-            <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
+            <div
+              key={service.id}
+              className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all"
+            >
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-blue-600/10 rounded-xl text-blue-400">
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-white font-bold uppercase text-sm">Atendimento de {formatSafeDate(service.created_at)}</h3>
-                  <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">Registro: #{service.id.slice(0, 8).toUpperCase()}</p>
+                  <h3 className="text-white font-bold uppercase text-sm">
+                    Atendimento de {formatSafeDate(service.created_at)}
+                  </h3>
+                  <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">
+                    Registro: #{service.id.slice(0, 8).toUpperCase()}
+                  </p>
                 </div>
               </div>
-              
-              <PDFDownloadLink 
-                document={<LabReportPDF service={service} patient={selectedPatient} />} 
-                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${formatSafeDate(service.created_at).replace(/\//g, "")}.pdf`}
+
+              <PDFDownloadLink
+                document={
+                  <LabReportPDF service={service} patient={selectedPatient} />
+                }
+                fileName={`Laudo_${selectedPatient.full_name.replace(
+                  /\s+/g,
+                  "_"
+                )}_${formatSafeDate(service.created_at).replace(/\//g, "")}.pdf`}
               >
                 {({ loading: pdfLoading }) => (
-                  <Button 
+                  <Button
                     className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-blue-900/20"
                     disabled={pdfLoading}
                   >
-                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar PDF</>}
+                    {pdfLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" /> Baixar PDF
+                      </>
+                    )}
                   </Button>
                 )}
               </PDFDownloadLink>
@@ -360,7 +420,9 @@ const Reports = () => {
           {services.length === 0 && selectedPatient && (
             <div className="flex flex-col items-center justify-center py-20 opacity-20">
               <FileText className="w-16 h-16 mb-4" />
-              <p className="text-lg font-bold uppercase tracking-widest">Nenhum atendimento finalizado</p>
+              <p className="text-lg font-bold uppercase tracking-widest">
+                Nenhum atendimento finalizado
+              </p>
             </div>
           )}
         </div>
