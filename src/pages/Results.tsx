@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { 
   Search, 
@@ -25,159 +25,75 @@ const Results = () => {
   const [selectedService, setSelectedService] = useState<any>(null);
   const [selectedExam, setSelectedExam] = useState<any>(null);
   
-  const [template, setTemplate] = useState('');
-  const [fieldValues, setFieldValues] = useState<string[]>([]);
+  const [examFields, setExamFields] = useState<any[]>([]);
+  const [results, setResults] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchServices();
-
-    const channel = supabase
-      .channel('results-queue')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, () => fetchServices())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'service_exams' }, () => fetchServices())
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
 
   const fetchServices = async () => {
     setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('services')
-        .select(`
-          *,
-          patients (full_name, cpf),
-          service_exams (
-            id,
-            status,
-            result_value,
-            exam_id,
-            exams (name)
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setServices(data || []);
-      
-      if (selectedService) {
-        const updated = data?.find(s => s.id === selectedService.id);
-        if (updated) setSelectedService(updated);
-      }
-    } catch (err: any) {
-      console.error('Erro ao carregar fila:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getFieldLabels = (html: string) => {
-    if (!html) return [];
-    // Remove tags HTML para extrair os labels
-    const text = html.replace(/<[^>]*>/g, ' ');
-    const parts = text.split('(?)');
-    return parts.slice(0, -1).map(part => {
-      const lines = part.trim().split('\n');
-      const lastLine = lines[lines.length - 1].trim();
-      return lastLine.replace(/[:._]/g, '').trim() || "Valor";
-    });
+    const { data } = await supabase
+      .from('services')
+      .select(`
+        *,
+        patients (full_name, cpf),
+        service_exams (
+          id, status, exam_id, structured_results,
+          exams (name)
+        )
+      `)
+      .order('created_at', { ascending: false });
+    setServices(data || []);
+    setLoading(false);
   };
 
   const handleSelectExam = async (se: any) => {
     setSelectedExam(se);
-    try {
-      const { data: preReport } = await supabase
-        .from('pre_reports')
-        .select('content')
-        .eq('exam_id', se.exam_id)
-        .maybeSingle();
-
-      const content = preReport?.content || "Modelo não encontrado.";
-      setTemplate(content);
-      const placeholderCount = (content.match(/\(\?\)/g) || []).length;
-      setFieldValues(new Array(placeholderCount).fill(''));
-    } catch (err: any) {
-      showError('Erro ao carregar modelo.');
-    }
-  };
-
-  const previewContent = useMemo(() => {
-    let result = template;
-    fieldValues.forEach(val => {
-      result = result.replace('(?)', val || '______');
-    });
-    return result;
-  }, [template, fieldValues]);
-
-  const handleValueChange = (index: number, val: string) => {
-    const newValues = [...fieldValues];
-    newValues[index] = val;
-    setFieldValues(newValues);
+    const { data: fields } = await supabase
+      .from('exam_fields')
+      .select('*')
+      .eq('exam_id', se.exam_id)
+      .order('order_index');
+    
+    setExamFields(fields || []);
+    setResults(se.structured_results || {});
   };
 
   const handleSave = async () => {
-    if (!selectedExam || !selectedService) return;
     setIsSaving(true);
     try {
-      const { error: examError } = await supabase
+      const { error } = await supabase
         .from('service_exams')
         .update({ 
-          result_value: previewContent,
+          structured_results: results,
           status: 'finalizado',
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedExam.id);
 
-      if (examError) throw examError;
-
-      const { data: allExams } = await supabase
-        .from('service_exams')
-        .select('status')
-        .eq('service_id', selectedService.id);
-
-      const allFinished = allExams?.every(e => e.status === 'finalizado');
-
-      if (allFinished) {
-        await supabase
-          .from('services')
-          .update({ status: 'finalizado' })
-          .eq('id', selectedService.id);
-        
-        showSuccess('Atendimento finalizado!');
-      } else {
-        showSuccess('Resultado salvo!');
-      }
-
-      setSelectedExam(null);
+      if (error) throw error;
+      showSuccess('Resultado salvo com sucesso!');
       fetchServices();
-    } catch (err: any) {
+      setSelectedExam(null);
+    } catch (err) {
       showError('Erro ao salvar resultado.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const filteredServices = services.filter(s => 
-    s.patients?.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    s.patients?.cpf.includes(search)
-  );
-
-  const labels = useMemo(() => getFieldLabels(template), [template]);
-
   return (
     <DashboardLayout>
-      <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700">
+      <div className="max-w-[1600px] mx-auto space-y-8">
         <div className="flex items-center justify-between bg-blue-950/20 p-6 rounded-[2rem] border border-white/5">
           <div>
-            <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
+            <h1 className="text-2xl font-black text-white uppercase tracking-tight flex items-center gap-3">
               <Edit3 className="w-6 h-6 text-blue-400" />
-              Resultados
+              Lançamento de Resultados
             </h1>
-            <p className="text-blue-300/50 text-sm mt-1 font-medium">Lançamento e conferência de exames</p>
           </div>
           {selectedService && (
             <Button variant="outline" onClick={() => { setSelectedService(null); setSelectedExam(null); }} className="border-blue-500/20 text-blue-400 rounded-xl font-black uppercase text-[10px] px-6 h-12 gap-2">
@@ -187,41 +103,32 @@ const Results = () => {
         </div>
 
         {!selectedService ? (
-          <div className="space-y-6">
-            <div className="relative">
-              <Search className="absolute left-5 top-4 h-5 w-5 text-blue-300/20" />
-              <Input placeholder="Buscar na fila..." className="bg-blue-950/40 border-white/5 h-14 pl-14 rounded-[1.5rem] text-white font-bold" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredServices.map(service => (
-                <button key={service.id} onClick={() => setSelectedService(service)} className="bg-blue-950/30 border border-white/5 p-6 rounded-[2.5rem] hover:border-blue-500/30 transition-all text-left group">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                      <FileText className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-white uppercase truncate max-w-[150px]">{service.patients?.full_name}</h3>
-                      <p className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">CPF: {service.patients?.cpf}</p>
-                    </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {services.map(service => (
+              <button key={service.id} onClick={() => setSelectedService(service)} className="bg-blue-950/30 border border-white/5 p-6 rounded-[2.5rem] hover:border-blue-500/30 transition-all text-left group">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                    <FileText className="w-6 h-6" />
                   </div>
-                  <div className="space-y-2 border-t border-white/5 pt-4">
-                    {service.service_exams?.map((se: any) => (
-                      <div key={se.id} className="flex items-center justify-between text-[9px] font-black uppercase tracking-tight">
-                        <span className="text-blue-300/30 truncate max-w-[120px]">{se.exams?.name}</span>
-                        <span className={cn(se.status === 'finalizado' ? "text-emerald-400" : "text-amber-400")}>{se.status}</span>
-                      </div>
-                    ))}
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase truncate max-w-[150px]">{service.patients?.full_name}</h3>
+                    <p className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">CPF: {service.patients?.cpf}</p>
                   </div>
-                </button>
-              ))}
-            </div>
+                </div>
+                <div className="space-y-2 border-t border-white/5 pt-4">
+                  {service.service_exams?.map((se: any) => (
+                    <div key={se.id} className="flex items-center justify-between text-[9px] font-black uppercase tracking-tight">
+                      <span className="text-blue-300/30">{se.exams?.name}</span>
+                      <span className={cn(se.status === 'finalizado' ? "text-emerald-400" : "text-amber-400")}>{se.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </button>
+            ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in zoom-in duration-500">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-3 space-y-3">
-              <div className="bg-blue-900/20 border border-blue-500/20 rounded-[2rem] p-6 mb-4">
-                <h3 className="text-lg font-bold text-white uppercase leading-tight">{selectedService.patients?.full_name}</h3>
-              </div>
               {selectedService.service_exams?.map((se: any) => (
                 <button key={se.id} onClick={() => handleSelectExam(se)} className={cn("w-full p-5 rounded-2xl border transition-all flex items-center justify-between group", selectedExam?.id === se.id ? "bg-blue-600 border-blue-400 text-white shadow-xl" : "bg-blue-950/40 border-white/5 text-blue-300/40")}>
                   <div className="flex items-center gap-4">
@@ -234,31 +141,35 @@ const Results = () => {
             </div>
             <div className="lg:col-span-9">
               {selectedExam ? (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                  <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl flex flex-col">
-                    <div className="space-y-6 flex-grow overflow-y-auto pr-4 max-h-[600px]">
-                      {fieldValues.map((val, idx) => (
-                        <div key={idx} className="space-y-2">
-                          <label className="text-[10px] font-black text-blue-300/30 uppercase tracking-widest ml-1">{labels[idx] || `Parâmetro ${idx + 1}`}</label>
-                          <Input value={val} onChange={(e) => handleValueChange(idx, e.target.value)} className="bg-blue-900/20 border-blue-500/10 h-14 rounded-2xl text-white font-bold text-base" placeholder="Digite o valor..." />
-                        </div>
-                      ))}
-                    </div>
-                    <Button onClick={handleSave} disabled={isSaving} className="w-full mt-10 bg-emerald-600 hover:bg-emerald-500 h-14 rounded-2xl font-black uppercase text-xs gap-3 shadow-xl">
-                      {isSaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5" /> Salvar Resultado</>}
-                    </Button>
+                <div className="bg-blue-950/40 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {examFields.map((field) => (
+                      <div key={field.id} className={cn("space-y-2", field.field_type === 'title' && "col-span-2 mt-6 first:mt-0")}>
+                        {field.field_type === 'title' ? (
+                          <h4 className="text-blue-400 font-black uppercase text-xs border-b border-blue-500/20 pb-2">{field.label}</h4>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center px-1">
+                              <label className="text-[10px] font-black text-blue-300/50 uppercase tracking-widest">{field.label}</label>
+                              {field.unit && <span className="text-[8px] text-blue-500 font-bold">{field.unit}</span>}
+                            </div>
+                            <Input 
+                              value={results[field.internal_name] || ''} 
+                              onChange={e => setResults({...results, [field.internal_name]: e.target.value})}
+                              className="bg-blue-900/20 border-blue-500/10 h-12 rounded-xl text-white font-bold"
+                              placeholder={field.reference_value ? `Ref: ${field.reference_value}` : ''}
+                            />
+                          </>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  <div className="bg-white border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col">
-                    <div className="bg-gray-100 border-b border-gray-200 p-8">
-                      <h3 className="text-lg font-bold text-black uppercase tracking-tight">{selectedExam.exams?.name}</h3>
-                    </div>
-                    <div className="p-10 flex-grow bg-white text-black">
-                      <div className="w-full h-full font-mono text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: previewContent }} />
-                    </div>
-                  </div>
+                  <Button onClick={handleSave} disabled={isSaving} className="w-full mt-10 bg-emerald-600 hover:bg-emerald-500 h-14 rounded-2xl font-black uppercase text-xs gap-3 shadow-xl">
+                    {isSaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5" /> Finalizar Laudo</>}
+                  </Button>
                 </div>
               ) : (
-                <div className="h-[700px] flex flex-col items-center justify-center opacity-10 border-4 border-dashed border-white/5 rounded-[3rem]">
+                <div className="h-[600px] flex flex-col items-center justify-center opacity-10 border-4 border-dashed border-white/5 rounded-[3rem]">
                   <FlaskConical className="w-24 h-24 mb-6" />
                   <p className="font-black uppercase tracking-[0.3em] text-lg">Selecione um exame</p>
                 </div>
