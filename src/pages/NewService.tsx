@@ -19,14 +19,14 @@ const NewService = () => {
   const [submitting, setSubmitting] = useState(false);
   
   const [patients, setPatients] = useState<any[]>([]);
-  const [exams, setExams] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
-  const [selectedExams, setSelectedExams] = useState<string[]>([]);
+  const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [isEmergency, setIsEmergency] = useState(false);
 
   useEffect(() => {
-    fetchExams();
+    fetchTemplates();
   }, []);
 
   useEffect(() => {
@@ -37,9 +37,19 @@ const NewService = () => {
     }
   }, [search]);
 
-  const fetchExams = async () => {
-    const { data } = await supabase.from('exams').select('*').order('name');
-    setExams(data || []);
+  const fetchTemplates = async () => {
+    const { data, error } = await supabase
+      .from('exam_templates')
+      .select('*')
+      .eq('active', true)
+      .order('category', { ascending: true })
+      .order('name', { ascending: true });
+    
+    if (error) {
+      console.error("Erro ao carregar templates:", error);
+      return;
+    }
+    setTemplates(data || []);
   };
 
   const searchPatients = async () => {
@@ -53,14 +63,14 @@ const NewService = () => {
     setLoading(false);
   };
 
-  const toggleExam = (examId: string) => {
-    setSelectedExams(prev => 
-      prev.includes(examId) ? prev.filter(id => id !== examId) : [...prev, examId]
+  const toggleTemplate = (templateId: string) => {
+    setSelectedTemplates(prev => 
+      prev.includes(templateId) ? prev.filter(id => id !== templateId) : [...prev, templateId]
     );
   };
 
   const handleFinish = async () => {
-    if (!selectedPatient || selectedExams.length === 0) {
+    if (!selectedPatient || selectedTemplates.length === 0) {
       showError('Selecione um paciente e pelo menos um exame.');
       return;
     }
@@ -83,10 +93,10 @@ const NewService = () => {
 
       if (sError) throw sError;
 
-      // 2. Criar os Exames do Atendimento (Service Exams)
-      const serviceExams = selectedExams.map(examId => ({
+      // 2. Criar os Exames do Atendimento (Service Exams) vinculados aos Templates
+      const serviceExams = selectedTemplates.map(templateId => ({
         service_id: service.id,
-        exam_id: examId,
+        exam_template_id: templateId,
         status: 'aguardando'
       }));
 
@@ -96,7 +106,7 @@ const NewService = () => {
 
       if (seError) throw seError;
 
-      showSuccess('Atendimento encaminhado para a rotina!');
+      showSuccess('Atendimento criado com sucesso!');
       navigate('/rotina');
     } catch (error: any) {
       showError(error.message || 'Erro ao criar atendimento.');
@@ -107,19 +117,19 @@ const NewService = () => {
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-700">
+      <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-700">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
               <PlusCircle className="w-6 h-6 text-blue-400" />
               Novo Atendimento
             </h1>
-            <p className="text-blue-300/50 text-sm mt-1 font-medium">Inicie um novo processo laboratorial para um paciente</p>
+            <p className="text-blue-300/50 text-sm mt-1 font-medium">Catálogo Dinâmico de Exames</p>
           </div>
           {selectedPatient && (
             <Button 
               variant="ghost" 
-              onClick={() => { setSelectedPatient(null); setSelectedExams([]); }}
+              onClick={() => { setSelectedPatient(null); setSelectedTemplates([]); }}
               className="text-red-400 hover:bg-red-500/10 font-bold uppercase text-[10px]"
             >
               Trocar Paciente
@@ -127,7 +137,6 @@ const NewService = () => {
           )}
         </div>
 
-        {/* Passo 1: Seleção de Paciente */}
         {!selectedPatient ? (
           <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm">
             <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-6 flex items-center gap-2">
@@ -175,13 +184,12 @@ const NewService = () => {
           </div>
         )}
 
-        {/* Passo 2: Seleção de Exames */}
         {selectedPatient && (
           <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm animate-in fade-in slide-in-from-bottom duration-500">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white">2</span>
-                Seleção de Exames
+                Catálogo de Exames
               </h3>
               <div className="flex items-center space-x-2 bg-red-500/10 px-4 py-2 rounded-xl border border-red-500/20">
                 <AlertCircle className={cn("w-4 h-4 text-red-400", isEmergency && "animate-pulse")} />
@@ -191,22 +199,23 @@ const NewService = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {exams.map(exam => (
+              {templates.map(template => (
                 <button
-                  key={exam.id}
-                  onClick={() => toggleExam(exam.id)}
+                  key={template.id}
+                  onClick={() => toggleTemplate(template.id)}
                   className={cn(
-                    "p-4 rounded-2xl border transition-all text-left flex items-center justify-between group",
-                    selectedExams.includes(exam.id) 
+                    "p-4 rounded-2xl border transition-all text-left flex flex-col gap-1 group",
+                    selectedTemplates.includes(template.id) 
                       ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-900/40" 
                       : "bg-blue-900/10 border-white/5 text-blue-300/60 hover:border-blue-500/30"
                   )}
                 >
-                  <div className="flex items-center gap-3">
-                    <FlaskConical className={cn("w-4 h-4", selectedExams.includes(exam.id) ? "text-white" : "text-blue-500/50")} />
-                    <span className="text-[10px] font-black uppercase tracking-tight">{exam.name}</span>
+                  <div className="flex items-center justify-between">
+                    <FlaskConical className={cn("w-4 h-4", selectedTemplates.includes(template.id) ? "text-white" : "text-blue-500/50")} />
+                    {selectedTemplates.includes(template.id) && <CheckCircle2 className="w-4 h-4" />}
                   </div>
-                  {selectedExams.includes(exam.id) && <CheckCircle2 className="w-4 h-4" />}
+                  <span className="text-[10px] font-black uppercase tracking-tight mt-2">{template.name}</span>
+                  <span className="text-[8px] font-bold opacity-50 uppercase">{template.category}</span>
                 </button>
               ))}
             </div>
@@ -214,11 +223,11 @@ const NewService = () => {
             <div className="mt-12 pt-8 border-t border-white/5 flex items-center justify-between">
               <div className="text-blue-300/40">
                 <p className="text-[10px] font-black uppercase tracking-widest">Total Selecionado</p>
-                <p className="text-xl font-bold text-white">{selectedExams.length} Exames</p>
+                <p className="text-xl font-bold text-white">{selectedTemplates.length} Exames</p>
               </div>
               <Button 
                 onClick={handleFinish}
-                disabled={submitting || selectedExams.length === 0}
+                disabled={submitting || selectedTemplates.length === 0}
                 className="bg-emerald-600 hover:bg-emerald-500 rounded-xl px-10 h-12 font-black uppercase text-xs gap-2 shadow-lg shadow-emerald-900/20"
               >
                 {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Finalizar Atendimento'}
