@@ -2,190 +2,347 @@
 
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { Search, FileText, Loader2, Download } from "lucide-react";
+import {
+  Search,
+  FileText,
+  User,
+  Loader2,
+  CheckCircle2,
+  Calendar,
+  Download,
+  Printer
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
-import { Document, Page, Text, View, StyleSheet, PDFDownloadLink, Image, Font } from "@react-pdf/renderer";
+import { 
+  Document, 
+  Page, 
+  Text, 
+  View, 
+  StyleSheet, 
+  PDFDownloadLink, 
+  Image
+} from "@react-pdf/renderer";
 
-// Registro de fontes
-Font.register({
-  family: 'Times-Roman',
-  src: 'https://fonts.gstatic.com/s/timesnewroman/v1/times.ttf'
-});
-Font.register({
-  family: 'Times-Bold',
-  src: 'https://fonts.gstatic.com/s/timesnewroman/v1/timesbold.ttf'
-});
-
-const HEMOGRAM_SCALE = 1448 / 595.28;
-const s = (val: number) => val / HEMOGRAM_SCALE;
+const formatSafeDate = (dateStr: string) => {
+  if (!dateStr) return "";
+  if (dateStr.length === 10) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return format(new Date(year, month - 1, day), "dd/MM/yyyy");
+  }
+  return format(parseISO(dateStr), "dd/MM/yyyy");
+};
 
 const styles = StyleSheet.create({
-  page: { padding: 40, paddingTop: 160, fontFamily: "Times-Roman", backgroundColor: "#ffffff" },
-  background: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
-  header: { position: "absolute", top: 110, left: 50, right: 50, borderBottom: 1, paddingBottom: 10 },
-  patientRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-  label: { fontSize: 10, fontFamily: "Times-Bold" },
-  value: { fontSize: 10, fontFamily: "Times-Roman" },
-  examTitle: { fontSize: 12, fontFamily: "Times-Bold", textAlign: "center", marginTop: 20, marginBottom: 10, textDecoration: 'underline' },
-  resultRow: { flexDirection: "row", borderBottom: 0.5, borderBottomColor: '#eee', paddingVertical: 3, alignItems: 'center' },
-  colLabel: { width: '40%', fontSize: 10 },
-  colResult: { width: '25%', fontSize: 10, fontFamily: "Times-Bold" },
-  colUnit: { width: '10%', fontSize: 9 },
-  colRef: { width: '25%', fontSize: 8, color: '#666' },
-  sectionTitle: { fontSize: 10, fontFamily: "Times-Bold", marginTop: 10, marginBottom: 5, color: '#444', borderBottom: 1, borderBottomColor: '#ccc' }
+  page: {
+    paddingTop: 180,    
+    paddingBottom: 60,  
+    paddingHorizontal: 50,
+    fontFamily: 'Times-Roman', 
+    backgroundColor: '#ffffff',
+  },
+  background: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  patientInfoFixed: {
+    position: 'absolute',
+    top: 125, 
+    left: 50,
+    right: 50,
+    borderBottom: 1,
+    borderBottomColor: '#000000',
+    paddingBottom: 10,
+  },
+  patientRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  label: {
+    fontSize: 12, 
+    fontFamily: 'Times-Bold',
+    color: '#000000',
+  },
+  value: {
+    fontSize: 12, 
+    fontFamily: 'Times-Roman',
+    color: '#000000',
+  },
+  examBlock: {
+    marginBottom: 20, 
+  },
+  htmlLine: {
+    marginBottom: 4,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+  },
+  resultText: {
+    fontSize: 12,
+    fontFamily: 'Times-Bold',
+  },
+  normalText: {
+    fontSize: 11,
+    fontFamily: 'Times-Roman',
+  },
+  refText: {
+    fontSize: 8,
+    color: '#333333',
+    fontFamily: 'Times-Roman',
+    marginTop: 2,
+  }
 });
 
-const LabReportPDF = ({ service, patient }: { service: any; patient: any }) => {
+const renderHTMLContent = (html: string) => {
+  if (!html) return null;
+
+  const cleanHtml = html
+    .replace(/<p>/g, '')
+    .replace(/<\/p>/g, '\n')
+    .replace(/<br\s*\/?>/g, '\n')
+    .replace(/<div>/g, '')
+    .replace(/<\/div>/g, '\n');
+
+  const lines = cleanHtml.split('\n');
+
+  return lines.map((line, i) => {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) return <View key={i} style={{ height: 8 }} />;
+
+    // Identifica se a linha é de referência
+    const isRefLine = 
+      trimmedLine.toUpperCase().includes('VALOR DE REFERÊNCIA') || 
+      trimmedLine.toUpperCase().includes('NORMAL') || 
+      trimmedLine.toUpperCase().includes('ALTERADA') ||
+      trimmedLine.toUpperCase().includes('REF:');
+
+    // Divide a linha para identificar partes em negrito
+    const parts = line.split(/(<b>.*?<\/b>|<strong>.*?<\/strong>)/g);
+    
+    return (
+      <View key={i} style={styles.htmlLine}>
+        {parts.map((part, j) => {
+          const isBold = part.startsWith('<b>') || part.startsWith('<strong>');
+          let text = part.replace(/<[^>]*>/g, '');
+          
+          let textStyle = styles.normalText;
+          
+          if (isRefLine) {
+            textStyle = styles.refText;
+          } else if (isBold) {
+            textStyle = styles.resultText;
+          }
+          
+          return (
+            <Text key={j} style={textStyle}>
+              {text}
+            </Text>
+          );
+        })}
+      </View>
+    );
+  });
+};
+
+const LabReportPDF = ({ service, patient }: { service: any, patient: any }) => {
+  const sortedExams = [...(service.service_exams || [])].sort((a, b) => {
+    const orderA = a.exams?.pre_reports?.[0]?.order_index ?? 999;
+    const orderB = b.exams?.pre_reports?.[0]?.order_index ?? 999;
+    return orderA - orderB;
+  });
+
   const timbreUrl = `${window.location.origin}/timbre.png`;
-  const timbreHemogramaUrl = `${window.location.origin}/timbre-hemograma_page-0001.png`;
 
   return (
-    <Document>
-      {service.service_exams?.map((se: any) => {
-        const isHemograma = se.exam_templates?.code === "HEMOGRAMA";
-        const results = se.exam_results?.[0]?.exam_result_values || [];
+    <Document title={`Laudo - ${patient.full_name}`}>
+      <Page size="A4" style={styles.page}>
+        <Image src={timbreUrl} style={styles.background} fixed />
         
-        if (isHemograma) {
-          // Mapeamento de valores por internal_name para coordenadas
-          const valMap: Record<string, string> = {};
-          results.forEach((rv: any) => {
-            valMap[rv.exam_template_fields?.internal_name] = rv.value;
-          });
-
-          return (
-            <Page key={se.id} size="A4" style={{ padding: 0 }}>
-              <Image src={timbreHemogramaUrl} style={styles.background} />
-              
-              {/* Cabeçalho Hemograma Coordenadas */}
-              <View style={{ position: 'absolute', top: s(340), left: s(120), right: s(120) }}>
-                <View style={styles.patientRow}>
-                  <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
-                  <Text style={styles.label}>DATA: <Text style={styles.value}>{format(parseISO(service.created_at), "dd/MM/yyyy")}</Text></Text>
-                </View>
-              </View>
-
-              {/* Valores Absolutos Hemograma */}
-              <Text style={{ position: 'absolute', left: s(660), top: s(860), width: s(200), textAlign: 'center', fontSize: 10 }}>{valMap['hemacias'] || ''}</Text>
-              <Text style={{ position: 'absolute', left: s(660), top: s(895), width: s(200), textAlign: 'center', fontSize: 10 }}>{valMap['hemoglobina'] || ''}</Text>
-              <Text style={{ position: 'absolute', left: s(660), top: s(930), width: s(200), textAlign: 'center', fontSize: 10 }}>{valMap['hematocrito'] || ''}</Text>
-              
-              {/* Plaquetas com fonte maior conforme solicitado */}
-              <Text style={{ position: 'absolute', left: s(520), top: s(1590), fontSize: 14, fontFamily: 'Times-Bold' }}>{valMap['plaquetas'] || ''}</Text>
-            </Page>
-          );
-        }
-
-        // Layout Padrão para outros exames
-        return (
-          <Page key={se.id} size="A4" style={styles.page}>
-            <Image src={timbreUrl} style={styles.background} />
-            <View style={styles.header}>
-              <View style={styles.patientRow}>
-                <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
-                <Text style={styles.label}>DATA: <Text style={styles.value}>{format(parseISO(service.created_at), "dd/MM/yyyy")}</Text></Text>
-              </View>
-            </View>
-            
-            <Text style={styles.examTitle}>{se.exam_templates?.name.toUpperCase()}</Text>
-            
-            {results.sort((a: any, b: any) => a.exam_template_fields?.order_index - b.exam_template_fields?.order_index).map((rv: any) => (
-              <React.Fragment key={rv.id}>
-                {rv.exam_template_fields?.field_type === 'title' ? (
-                  <Text style={styles.sectionTitle}>{rv.exam_template_fields?.label}</Text>
-                ) : (
-                  <View style={styles.resultRow}>
-                    <Text style={styles.colLabel}>{rv.exam_template_fields?.label}</Text>
-                    <Text style={styles.colResult}>{rv.value || '---'}</Text>
-                    <Text style={styles.colUnit}>{rv.unit || ''}</Text>
-                    <Text style={styles.colRef}>{rv.reference_value || ''}</Text>
-                  </View>
-                )}
-              </React.Fragment>
-            ))}
-          </Page>
-        );
-      })}
+        {/* Cabeçalho Ajustado e Centralizado */}
+        <View style={styles.patientInfoFixed} fixed>
+          <View style={styles.patientRow}>
+            <Text style={styles.label}>PACIENTE: <Text style={styles.value}>{patient.full_name.toUpperCase()}</Text></Text>
+            <Text style={styles.label}>DN: <Text style={styles.value}>{formatSafeDate(patient.birth_date)}</Text></Text>
+          </View>
+          <View style={styles.patientRow}>
+            <Text style={styles.label}>CPF: <Text style={styles.value}>{patient.cpf}</Text></Text>
+            <Text style={styles.label}>DATA: <Text style={styles.value}>{formatSafeDate(service.created_at)}</Text></Text>
+            <Text style={styles.label}>REGISTRO: <Text style={styles.value}>#{service.id.slice(0, 8).toUpperCase()}</Text></Text>
+          </View>
+        </View>
+        
+        {/* Conteúdo dos Exames */}
+        {sortedExams.map((se: any) => (
+          <View key={se.id} style={styles.examBlock} wrap={false}>
+            {renderHTMLContent(se.result_value || "")}
+          </View>
+        ))}
+      </Page>
     </Document>
   );
 };
 
 const Reports = () => {
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (search.length > 2) {
+      const timer = setTimeout(() => searchPatients(), 500);
+      return () => clearTimeout(timer);
+    } else {
+      setPatients([]);
+    }
+  }, [search]);
+
+  useEffect(() => {
+    if (selectedPatient) {
+      fetchPatientServices(selectedPatient.id);
+    }
+  }, [selectedPatient]);
 
   const searchPatients = async () => {
-    const { data } = await supabase.from("patients").select("*").or(`full_name.ilike.%${search}%,cpf.ilike.%${search}%`).limit(5);
+    setLoading(true);
+    const { data } = await supabase
+      .from("patients")
+      .select("*")
+      .or(`full_name.ilike.%${search}%,cpf.ilike.%${search}%`)
+      .limit(5);
     setPatients(data || []);
+    setLoading(false);
   };
 
-  const fetchServices = async (pid: string) => {
-    setLoading(true);
+  const fetchPatientServices = async (patientId: string) => {
     const { data } = await supabase
       .from("services")
       .select(`
-        *, 
+        *,
         service_exams (
-          *, 
-          exam_templates (name, code),
-          exam_results (
-            *,
-            exam_result_values (
-              *,
-              exam_template_fields (*)
+          *,
+          exams (
+            name,
+            pre_reports (
+              sector,
+              order_index
             )
           )
         )
       `)
-      .eq("patient_id", pid)
-      .eq("status", "finalizado");
-    
+      .eq("patient_id", patientId)
+      .eq("status", "finalizado")
+      .order("created_at", { ascending: false });
+
     setServices(data || []);
-    setLoading(false);
+  };
+
+  const handleSelectPatient = (patient: any) => {
+    setSelectedPatient(patient);
+    setPatients([]);
+    setSearch("");
   };
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto space-y-8">
-        <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8">
-          <Input 
-            placeholder="Buscar paciente para laudo..." 
-            value={search} 
-            onChange={e => setSearch(e.target.value)} 
-            onKeyUp={searchPatients} 
-            className="bg-blue-900/20 border-blue-500/10 h-12 rounded-2xl text-white" 
-          />
-          <div className="mt-4 space-y-2">
-            {patients.map(p => (
-              <button key={p.id} onClick={() => { setSelectedPatient(p); fetchServices(p.id); setPatients([]); }} className="w-full p-4 bg-blue-900/10 rounded-xl text-left text-white hover:bg-blue-600/20">
-                {p.full_name} - {p.cpf}
-              </button>
-            ))}
-          </div>
+      <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-700">
+        <div>
+          <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
+            <Printer className="w-6 h-6 text-blue-400" />
+            Impressão de Laudos
+          </h1>
+          <p className="text-blue-300/50 text-sm mt-1 font-medium">Busque pacientes e gere PDFs oficiais dos atendimentos finalizados</p>
         </div>
 
-        {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="animate-spin text-blue-500" /></div>
-        ) : services.map(s => (
-          <div key={s.id} className="bg-blue-950/30 border border-white/5 p-6 rounded-2xl flex justify-between items-center">
-            <div>
-              <span className="text-white font-bold block">Atendimento {format(parseISO(s.created_at), "dd/MM/yyyy")}</span>
-              <span className="text-[10px] text-blue-400 uppercase font-black">Status: {s.status}</span>
-            </div>
-            <PDFDownloadLink document={<LabReportPDF service={s} patient={selectedPatient} />} fileName={`laudo_${selectedPatient?.full_name}.pdf`}>
-              {({ loading }) => (
-                <Button className="bg-blue-600 rounded-xl gap-2">
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar Laudo</>}
-                </Button>
-              )}
-            </PDFDownloadLink>
+        <div className="bg-blue-950/30 border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm relative z-30">
+          <div className="relative">
+            <Search className="absolute left-4 top-3.5 h-5 w-5 text-blue-300/30" />
+            <Input
+              placeholder="Buscar por Nome ou CPF..."
+              className="bg-blue-900/20 border-blue-500/10 h-12 pl-12 rounded-2xl text-white font-bold"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {loading && <Loader2 className="absolute right-4 top-3.5 h-5 w-5 text-blue-400 animate-spin" />}
           </div>
-        ))}
+
+          {patients.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-blue-950 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+              {patients.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => handleSelectPatient(p)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-blue-900/40 border-b border-white/5 last:border-none transition-all"
+                >
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-white uppercase">{p.full_name}</p>
+                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">CPF: {p.cpf}</p>
+                  </div>
+                  <CheckCircle2 className="w-5 h-5 text-blue-500" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {selectedPatient && (
+          <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-6 flex items-center justify-between animate-in zoom-in duration-500">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                <User className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs font-black text-blue-400 uppercase tracking-widest">Paciente Selecionado</p>
+                <h3 className="text-lg font-bold text-white uppercase">{selectedPatient.full_name}</h3>
+              </div>
+            </div>
+            <Button variant="ghost" onClick={() => setSelectedPatient(null)} className="text-red-400 hover:bg-red-500/10 font-bold uppercase text-[10px]">Trocar Paciente</Button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4">
+          {services.map((service) => (
+            <div key={service.id} className="bg-blue-950/30 border border-white/5 rounded-2xl p-6 flex items-center justify-between group hover:border-blue-500/30 transition-all">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-600/10 rounded-xl text-blue-400">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold uppercase text-sm">Atendimento de {formatSafeDate(service.created_at)}</h3>
+                  <p className="text-blue-300/40 text-[10px] font-black uppercase tracking-widest">Registro: #{service.id.slice(0, 8).toUpperCase()}</p>
+                </div>
+              </div>
+              
+              <PDFDownloadLink 
+                document={<LabReportPDF service={service} patient={selectedPatient} />} 
+                fileName={`Laudo_${selectedPatient.full_name.replace(/\s+/g, "_")}_${formatSafeDate(service.created_at).replace(/\//g, "")}.pdf`}
+              >
+                {({ loading: pdfLoading }) => (
+                  <Button 
+                    className="bg-blue-600 hover:bg-blue-500 rounded-xl gap-2 font-bold uppercase text-[10px] px-8 h-11 shadow-lg shadow-blue-900/20"
+                    disabled={pdfLoading}
+                  >
+                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /> Baixar PDF</>}
+                  </Button>
+                )}
+              </PDFDownloadLink>
+            </div>
+          ))}
+
+          {services.length === 0 && selectedPatient && (
+            <div className="flex flex-col items-center justify-center py-20 opacity-20">
+              <FileText className="w-16 h-16 mb-4" />
+              <p className="text-lg font-bold uppercase tracking-widest">Nenhum atendimento finalizado</p>
+            </div>
+          )}
+        </div>
       </div>
     </DashboardLayout>
   );
